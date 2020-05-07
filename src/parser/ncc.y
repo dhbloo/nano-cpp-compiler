@@ -5,12 +5,14 @@
 #include <cstdint>
 #include <string>
 
-//extern int yylex();
-namespace yy {
-    void parser::error(const location_type& l, const std::string& msg);
-}
-
 %}
+
+%code provides {
+    typedef yy::parser::semantic_type YYSTYPE;
+    typedef yy::parser::location_type YYLTYPE;
+
+    extern int yylex(YYSTYPE * yylval_param, YYLTYPE * yylloc_param);
+}
 
 /* bison declerations */
 %require "3.2"
@@ -59,14 +61,17 @@ namespace yy {
 %token ARROW        "->"
 
 /* Keyword */
-%token BOOL			BREAK			CASE			CHAR			CLASS
-%token CONST		CONTINUE		DEFAULT			DELETE			DO
-%token DOUBLE		ELSE			ENUM			FALSE			FLOAT
-%token FOR			FRIEND			IF				INT				LONG
-%token NEW			OPERATOR		PRIVATE			PROTECTED		PUBLIC			
-%token REGISTER		RETURN			SHORT			SIGNED			SIZEOF
-%token STATIC		STRUCT			SWITCH			THIS			TRUE
-%token TYPEDEF		UNSIGNED		VIRTUAL			VOID			WHILE
+%token BOOL         BREAK           CASE            CHAR            CLASS
+%token CONST        CONTINUE        DEFAULT         DELETE          DO
+%token DOUBLE       ELSE            ENUM            FALSE           FLOAT
+%token FOR          FRIEND          IF              INT             LONG
+%token NEW          OPERATOR        PRIVATE         PROTECTED       PUBLIC            
+%token REGISTER     RETURN          SHORT           SIGNED          SIZEOF
+%token STATIC       STRUCT          SWITCH          THIS            TRUE
+%token TYPEDEF      UNSIGNED        VIRTUAL         VOID            WHILE
+
+/* End of file */
+%token ENDOFFILE
 
 /* Operator associativity */
 %left "::" '.' "->" ".*" "->*" '*' '/' '%' '+' '-' "<<" ">>" 
@@ -75,7 +80,6 @@ namespace yy {
 
 
 /* non-terminals */
-
 
 
 %start translation_unit
@@ -92,10 +96,10 @@ identifier:
 
 literal:
     int_literal
-|	char_literal
-|	float_literal
-|	string_literal
-|	boolean_literal
+|   char_literal
+|   float_literal
+|   string_literal
+|   boolean_literal
 ;
 
 int_literal:
@@ -233,7 +237,7 @@ new_type_id:
 ;
 
 new_declarator:
-	ptr_operator new_declarator_opt
+    ptr_operator new_declarator_opt
 |   direct_new_declarator
 ;
 
@@ -243,17 +247,17 @@ direct_new_declarator:
 ;
     
 new_initializer:
-	'(' expression_list_opt ')'
+    '(' expression_list_opt ')'
 ;
 
 delete_expression:
-	COLONCOLON_opt DELETE cast_expression
-|	COLONCOLON_opt DELETE '[' ']' cast_expression
+    COLONCOLON_opt DELETE cast_expression
+|   COLONCOLON_opt DELETE '[' ']' cast_expression
 ;
 
 cast_expression:
-	unary_expression
-|	'(' type_id ')' cast_expression
+    unary_expression
+|   '(' type_id ')' cast_expression
 ;
 
 pm_expression:
@@ -331,11 +335,11 @@ assignment_expression:
 ;
 
 assignment_operator:
-	'=' 
-|	"*=" 
-|	"/=" 
-|	"%="
-|	"+="
+    '=' 
+|   "*=" 
+|   "/=" 
+|   "%="
+|   "+="
 |   "-=" 
 |   ">>=" 
 |   "<<=" 
@@ -345,12 +349,12 @@ assignment_operator:
 ;
 
 expression:
-	assignment_expression
-|	expression ',' assignment_expression
+    assignment_expression
+|   expression ',' assignment_expression
 ;
 
 constant_expression:
-	conditional_expression
+    conditional_expression
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -373,16 +377,16 @@ labeled_statement:
 ;
 
 expression_statement:
-	expression_opt ';'
+    expression_opt ';'
 ;
 
 compound_statement:
-	'{' statement_seq_opt '}'
+    '{' statement_seq_opt '}'
 ;
 
 statement_seq:
-	statement
-|	statement_seq statement
+    statement
+|   statement_seq statement
 ;
 
 selection_statement:
@@ -413,7 +417,7 @@ jump_statement:
 ;
 
 declaration_statement:
-	block_declaration
+    block_declaration
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -421,23 +425,23 @@ declaration_statement:
  * ------------------------------------------------------------------------- */
 
 declaration_seq:
-	declaration
-|	declaration_seq declaration
+    declaration
+|   declaration_seq declaration
 ;
-	
+    
 declaration:
-	block_declaration
-|	function_definition
+    block_declaration
+|   function_definition
 ;
-	
+    
 block_declaration:
     simple_declaration
 ;
 
 simple_declaration:
-	decl_specifier_seq_opt init_declarator_list_opt ';'
+    decl_specifier_seq_opt init_declarator_list_opt ';'
 ;
-	
+    
 decl_specifier:
     type_specifier
 |   function_specifier
@@ -446,9 +450,9 @@ decl_specifier:
 ;
     
 decl_specifier_seq:
-	decl_specifier_seq_opt decl_specifier
+    decl_specifier_seq_opt decl_specifier
 ;
-	
+    
 function_specifier:
     VIRTUAL
 ;
@@ -487,21 +491,21 @@ elaborated_type_specifier:
 ;
     
 enum_specifier:
-	ENUM identifier_opt '{' enumerator_list_opt '}'
+    ENUM identifier_opt '{' enumerator_list_opt '}'
 ;
-	
+    
 enumerator_list:
-	enumerator_definition 
-|	enumerator_list ',' enumerator_definition
+    enumerator_definition 
+|   enumerator_list ',' enumerator_definition
 ;
-	
+    
 enumerator_definition:
-	enumerator
-|	enumerator '=' constant_expression
+    enumerator
+|   enumerator '=' constant_expression
 ;
-	
+    
 enumerator:
-	identifier
+    identifier
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -509,14 +513,14 @@ enumerator:
  * ------------------------------------------------------------------------- */
 
 init_declarator_list:
-	init_declarator
-|	init_declarator_list ',' init_declarator
+    init_declarator
+|   init_declarator_list ',' init_declarator
 ;
 
 init_declarator:
-	declarator initializer_opt
+    declarator initializer_opt
 ;
-	
+    
 declarator:
     direct_declarator
 |   ptr_operator declarator
@@ -535,11 +539,11 @@ ptr_operator:
 ;
 
 cv_qualifier_seq:
-	cv_qualifier cv_qualifier_seq_opt
+    cv_qualifier cv_qualifier_seq_opt
 ;
     
 cv_qualifier:
-	CONST
+    CONST
 ;
 
 declarator_id:
@@ -548,21 +552,21 @@ declarator_id:
 ;
 
 type_id:
-	type_specifier_seq abstract_declarator_opt
+    type_specifier_seq abstract_declarator_opt
 ;
 
 type_specifier_seq:
-	type_specifier type_specifier_seq_opt
+    type_specifier type_specifier_seq_opt
 ;
-	
+    
 abstract_declarator:
     ptr_operator abstract_declarator_opt
 |   direct_abstract_declarator
 ;
 
 direct_abstract_declarator:
-	direct_abstract_declarator_opt '(' parameter_declaration_list_opt ')' cv_qualifier_opt
-|	direct_abstract_declarator_opt '[' constant_expression_opt ']' '(' abstract_declarator ')'
+    direct_abstract_declarator_opt '(' parameter_declaration_list_opt ')' cv_qualifier_opt
+|   direct_abstract_declarator_opt '[' constant_expression_opt ']' '(' abstract_declarator ')'
 ;
 
 parameter_declaration_list:
@@ -578,16 +582,16 @@ parameter_declaration:
 ;
     
 function_definition:
-	decl_specifier_seq_opt declarator ctor_initializer_opt function_body
+    decl_specifier_seq_opt declarator ctor_initializer_opt function_body
 ;
 
 function_body:
-	compound_statement
+    compound_statement
 ;
 
 initializer:
-	'=' initializer_clause
-|	'(' expression_list ')'
+    '=' initializer_clause
+|   '(' expression_list ')'
 ;
 
 initializer_clause:
@@ -606,7 +610,7 @@ initializer_list:
  * ------------------------------------------------------------------------- */
 
 class_specifier:
-	class_head '{' member_specification_opt '}'
+    class_head '{' member_specification_opt '}'
 ;
 
 class_head:
@@ -641,11 +645,11 @@ member_declarator:
 ;
     
 pure_specifier:
-	'=' '0'
+    '=' '0'
 ;
 
 constant_initializer:
-	'=' constant_expression
+    '=' constant_expression
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -653,7 +657,7 @@ constant_initializer:
  * ------------------------------------------------------------------------- */
 
 base_clause:
-	':' base_specifier
+    ':' base_specifier
 ;
 
 base_specifier:
@@ -672,19 +676,19 @@ access_specifier:
  * ------------------------------------------------------------------------- */
 
 conversion_function_id:
-	operator conversion_type_id
+    operator conversion_type_id
 ;
 
 conversion_type_id:
-	type_specifier_seq conversion_declarator_opt
+    type_specifier_seq conversion_declarator_opt
 ;
 
 conversion_declarator:
-	ptr_operator conversion_declarator_opt
+    ptr_operator conversion_declarator_opt
 ;
 
 ctor_initializer:
-	':' mem_initializer_list
+    ':' mem_initializer_list
 ;
 
 mem_initializer_list:
@@ -693,12 +697,12 @@ mem_initializer_list:
 ;
 
 mem_initializer:
-	mem_initializer_id '(' expression_list_opt ')'
+    mem_initializer_id '(' expression_list_opt ')'
 ;
 
 mem_initializer_id:
-	COLONCOLON_opt nested_name_specifier_opt class_name
-|	identifier
+    COLONCOLON_opt nested_name_specifier_opt class_name
+|   identifier
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -706,9 +710,9 @@ mem_initializer_id:
  * ------------------------------------------------------------------------- */
 
 operator_function_id:
-	OPERATOR operator
+    OPERATOR operator
 ;
-	
+    
 operator:
     '+' 
 |   '-' 

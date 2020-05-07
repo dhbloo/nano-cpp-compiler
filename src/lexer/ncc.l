@@ -6,9 +6,6 @@
 #include <cstdlib>
 #include "../parser/yyparser.h"
 
-typedef yy::parser::semantic_type YYSTYPE;
-typedef yy::parser::location_type YYLTYPE;
-
 static int yycolumn;
 
 #define YY_USER_INIT yycolumn = 1;
@@ -17,8 +14,6 @@ static int yycolumn;
     yylloc->columns(yyleng - 1);                        \
     yycolumn += yyleng;                                 \
 }
-
-
 
 static bool lookup_escape_char(char& c);
 static char convert_escape_char(const char* text);
@@ -32,20 +27,21 @@ static std::string convert_escape_string(const char* text);
 %option warn nodefault
 %option 8bit batch fast
 %option bison-bridge bison-locations
-%option outfile="yylexer.cpp"
+%option outfile="yylexer.cpp" header-file="yylexer.h"
 
 /* lexical definitions */
 
 ws                      [ \f\v\t\r\a]
-nonws                   [^ \n\f\v\t\r\a]
 
 identifier              [_a-zA-Z][_a-zA-Z0-9]*
-decimal_literal         [1-9][0-9]*
+decimal_literal         0|([1-9][0-9]*)
 hexadecimal_literal     (0x|0X)[a-fA-F0-9]+
 float_literal           [-+]?(([0-9]*\.[0-9]+)|([0-9]+\.))(f|F)?
 
 char_literal            \'([^\\\'\n]|(\\.))\'
 string_literal          \"((\\.)|[^"\\\n])*\"
+char_lit                \'([^\\\'\n]|(\\.))
+string_lit              \"((\\.)|[^"\\\n])*
 
 boolean_literal         "false"|"true"
 
@@ -77,51 +73,50 @@ boolean_literal         "false"|"true"
                           return yy::parser::token::CHARVAL; }
 {string_literal}        { yylval->emplace<std::string>(convert_escape_string(yytext)); 
                           return yy::parser::token::STRVAL; }
-
-\'({nonws}*)(\'?)       { throw yy::parser::syntax_error(*yylloc, "unclosed character: " + std::string(yytext, yyleng)); }
-\"({nonws}*)(\"?)       { throw yy::parser::syntax_error(*yylloc, "unclosed string: " + std::string(yytext, yyleng)); }
+{char_lit}              { throw yy::parser::syntax_error(*yylloc, "unterminated character: " + std::string(yytext, yyleng)); }
+{string_lit}            { throw yy::parser::syntax_error(*yylloc, "unterminated string: " + std::string(yytext, yyleng)); }
 
 "false"                 { yylval->emplace<bool>(false); 
                           return yy::parser::token::BOOLVAL; }
 "true"                  { yylval->emplace<bool>(true); 
                           return yy::parser::token::BOOLVAL; }
 
-"bool"			        { return yy::parser::token::BOOL; }
-"break"			        { return yy::parser::token::BREAK; }
-"case"			        { return yy::parser::token::CASE; }
-"char"			        { return yy::parser::token::CHAR; }
+"bool"                  { return yy::parser::token::BOOL; }
+"break"                 { return yy::parser::token::BREAK; }
+"case"                  { return yy::parser::token::CASE; }
+"char"                  { return yy::parser::token::CHAR; }
 "class"                 { return yy::parser::token::CLASS; }
-"const"			        { return yy::parser::token::CONST; }
-"continue"		        { return yy::parser::token::CONTINUE; }
-"default"			    { return yy::parser::token::DEFAULT; }
-"delete"			    { return yy::parser::token::DELETE; }
+"const"                 { return yy::parser::token::CONST; }
+"continue"              { return yy::parser::token::CONTINUE; }
+"default"               { return yy::parser::token::DEFAULT; }
+"delete"                { return yy::parser::token::DELETE; }
 "do"                    { return yy::parser::token::DO; }
-"double"			    { return yy::parser::token::DOUBLE; }
-"else"			        { return yy::parser::token::ELSE; }
-"enum"			        { return yy::parser::token::ENUM; }
+"double"                { return yy::parser::token::DOUBLE; }
+"else"                  { return yy::parser::token::ELSE; }
+"enum"                  { return yy::parser::token::ENUM; }
 "float"                 { return yy::parser::token::FLOAT; }
-"for"				    { return yy::parser::token::FOR; }
-"friend"			    { return yy::parser::token::FRIEND; }
-"if"				    { return yy::parser::token::IF; }
-"int"				    { return yy::parser::token::INT; }
+"for"                   { return yy::parser::token::FOR; }
+"friend"                { return yy::parser::token::FRIEND; }
+"if"                    { return yy::parser::token::IF; }
+"int"                   { return yy::parser::token::INT; }
 "long"                  { return yy::parser::token::LONG; }
-"new"				    { return yy::parser::token::NEW; }
-"private"			    { return yy::parser::token::PRIVATE; }
-"protected"		        { return yy::parser::token::PROTECTED; }
-"public"			    { return yy::parser::token::PUBLIC; }
+"new"                   { return yy::parser::token::NEW; }
+"private"               { return yy::parser::token::PRIVATE; }
+"protected"             { return yy::parser::token::PROTECTED; }
+"public"                { return yy::parser::token::PUBLIC; }
 "register"              { return yy::parser::token::REGISTER; }
-"return"			    { return yy::parser::token::RETURN; }
-"short"			        { return yy::parser::token::SHORT; }
-"signed"			    { return yy::parser::token::SIGNED; }
-"sizeof"			    { return yy::parser::token::SIZEOF; }
+"return"                { return yy::parser::token::RETURN; }
+"short"                 { return yy::parser::token::SHORT; }
+"signed"                { return yy::parser::token::SIGNED; }
+"sizeof"                { return yy::parser::token::SIZEOF; }
 "static"                { return yy::parser::token::STATIC; }
-"struct"			    { return yy::parser::token::STRUCT; }
-"switch"			    { return yy::parser::token::SWITCH; }
-"this"			        { return yy::parser::token::THIS; }
+"struct"                { return yy::parser::token::STRUCT; }
+"switch"                { return yy::parser::token::SWITCH; }
+"this"                  { return yy::parser::token::THIS; }
 "typedef"               { return yy::parser::token::TYPEDEF; }
-"unsigned"		        { return yy::parser::token::UNSIGNED; }
-"virtual"			    { return yy::parser::token::VIRTUAL; }
-"void"			        { return yy::parser::token::VOID; }
+"unsigned"              { return yy::parser::token::UNSIGNED; }
+"virtual"               { return yy::parser::token::VIRTUAL; }
+"void"                  { return yy::parser::token::VOID; }
 "while"                 { return yy::parser::token::WHILE; }
 
 "{"                     { return '{'; }
@@ -135,7 +130,7 @@ boolean_literal         "false"|"true"
 "?"                     { return '?'; }
 "::"                    { return yy::parser::token::COLONCOLON; }
 "."                     { return '.'; }
-".*"	                { return yy::parser::token::DOTSTAR; }
+".*"                    { return yy::parser::token::DOTSTAR; }
 "+"                     { return '+'; }
 "-"                     { return '-'; }
 "*"                     { return '*'; }
@@ -180,12 +175,14 @@ boolean_literal         "false"|"true"
 \n+                     { yycolumn = 1; }
 .                       { throw yy::parser::syntax_error(*yylloc, "invalid character: " + std::string(yytext, yyleng)); }
 
+<<EOF>>                 { return yy::parser::token::ENDOFFILE; }
+
 
 %%
 
 static bool lookup_escape_char(char& c) {
-    const char escape[10] = {'\'', '\"', '\\', 'a', 'b', 'f', 'n', 'r', 't', 'v'};
-    const char real[10] = {'\'', '\"', '\\', '\a', '\b', '\f', '\n', '\r', '\t', '\v'};
+    const char escape[] = {'\'', '\"', '\\', 'a', 'b', 'f', 'n', 'r', 't', 'v', '0'};
+    const char real[] = {'\'', '\"', '\\', '\a', '\b', '\f', '\n', '\r', '\t', '\v', '\0'};
 
     for (int i = 0; i < sizeof(escape); i++) {
         if (c == escape[i]) {
@@ -202,7 +199,7 @@ static char convert_escape_char(const char* text) {
     if (text[1] == '\\') {
         char c = text[2];
         if (!lookup_escape_char(c))
-            std::cerr << "unknown escape sequence '\\" << c << "'\n";
+            std::cerr << "warning: unknown escape sequence '\\" << c << "'\n";
         return c;
     } else {
         return text[1];
@@ -210,11 +207,18 @@ static char convert_escape_char(const char* text) {
 }
 
 static std::string convert_escape_string(const char* text) {
-    std::string str{text};
-    // TODO!
-    for (char& c : str) {
-        if (!lookup_escape_char(c))
-            std::cerr << "unknown escape sequence '\\" << c << "'\n";
+    std::string str{text + 1};
+    str = str.substr(0, str.length() - 1);
+
+    for (auto it = str.begin(); it != str.end(); it++) {
+        if (*it == '\\' && (it + 1) != str.end()) {
+            char c = *(it + 1);
+            if (!lookup_escape_char(c)) {
+                std::cerr << "warning: unknown escape sequence '\\" << c << "'\n";
+            }
+
+            str.replace(it, it + 2, 1, c);
+        }
     }
     return str;
 }

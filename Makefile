@@ -1,13 +1,15 @@
+CXX = g++ -std=c++11 -Os -c
 
 yyparser: src/parser/ncc.y
 	cd src/parser && bison ncc.y
+	$(CXX) -o bin/yyparser.o src/parser/yyparser.cpp
 
 yylexer: src/lexer/ncc.l yyparser
 	cd src/lexer && flex ncc.l
-	g++ -std=c++11 -c -o bin/yylexer.o src/lexer/yylexer.cpp
+	$(CXX) -o bin/yylexer.o src/lexer/yylexer.cpp
 
 lextest: yylexer
-	g++ -O3 -o bin/yylexer.exe src/lexer/yylexer.cpp
+	g++ -std=c++11 -Os -o bin/lextest.exe src/lexer/lextest.cpp bin/yylexer.o bin/yyparser.o
 
 
 clean:

@@ -64,7 +64,7 @@ int-literal:
 以下定义基于正则表达式（`<>`为展开其他正则表达式引用）：
 
 ```
-decimal-literal		:= [1-9][0-9]*
+decimal-literal		:= 0|([1-9][0-9]*)
 hexadecimal-literal	:= (0x|0X)[a-fA-F0-9]+
 float-literal		:= [-+]?(([0-9]*\.[0-9]+)|([0-9]+\.))(f|F)?
 char-literal		:= \'([^\\\'\n]|(\\.))\'
