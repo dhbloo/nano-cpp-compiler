@@ -14,7 +14,7 @@
     extern int yylex(YYSTYPE * yylval_param, YYLTYPE * yylloc_param);
 }
 
-/* bison declerations */
+/* bison declarations */
 %require "3.2"
 %language "c++"
 %locations
@@ -23,6 +23,8 @@
 %define api.location.file "yylocation.h"
 %define api.value.type variant
 //%define api.value.automove
+%define parse.trace
+%define parse.error verbose
 
 /* Identifier */
 %token <std::string> IDENTIFIER
@@ -144,7 +146,7 @@ enum_name:
  * ------------------------------------------------------------------------- */
 
 translation_unit:
-|   declaration_seq
+    declaration_seq_opt ENDOFFILE
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -421,7 +423,7 @@ declaration_statement:
 ;
 
 /* ------------------------------------------------------------------------- *
- * 5. Decleration
+ * 5. Declaration
  * ------------------------------------------------------------------------- */
 
 declaration_seq:
@@ -450,7 +452,8 @@ decl_specifier:
 ;
     
 decl_specifier_seq:
-    decl_specifier_seq_opt decl_specifier
+    decl_specifier
+|   decl_specifier_seq decl_specifier
 ;
     
 function_specifier:
@@ -533,13 +536,9 @@ direct_declarator:
 ;
 
 ptr_operator:
-    '*' cv_qualifier_seq_opt
+    '*' cv_qualifier_opt
 |   '&'
 |   COLONCOLON_opt nested_name_specifier '*' cv_qualifier_opt
-;
-
-cv_qualifier_seq:
-    cv_qualifier cv_qualifier_seq_opt
 ;
     
 cv_qualifier:
@@ -761,6 +760,7 @@ operator:
 COLONCOLON_opt: | "::" ;
 COMMA_opt: | ',';
 
+declaration_seq_opt: | declaration_seq;
 expression_list_opt: | expression_list ;
 nested_name_specifier_opt: | nested_name_specifier;
 type_name_COLONCOLON_opt: | type_name "::";
@@ -779,7 +779,6 @@ initializer_opt: | initializer;
 parameter_declaration_list_opt: | parameter_declaration_list;
 cv_qualifier_opt: | cv_qualifier;
 constant_expression_opt: | constant_expression;
-cv_qualifier_seq_opt: | cv_qualifier_seq;
 abstract_declarator_opt: | abstract_declarator;
 type_specifier_seq_opt: | type_specifier_seq;
 direct_abstract_declarator_opt: | direct_abstract_declarator;
