@@ -1,11 +1,16 @@
 /* Nano-cpp parser generator */
 
-%{
+%code requires {
+    #include "../ast/node.h"
+}
 
-#include <cstdint>
-#include <string>
+%code {
+    #include <cstdint>
+    #include <string>
+    #include <iostream>
 
-%}
+    using namespace ast;
+}
 
 %code provides {
     typedef yy::parser::semantic_type YYSTYPE;
@@ -22,9 +27,12 @@
 %output "yyparser.cpp"
 %define api.location.file "yylocation.h"
 %define api.value.type variant
-//%define api.value.automove
+%define api.value.automove
 %define parse.trace
 %define parse.error verbose
+
+%parse-param { ast::Ptr<ast::TranslationUnit>& astRoot }
+
 
 /* Identifier */
 %token <std::string> IDENTIFIER
@@ -72,9 +80,6 @@
 %token STATIC       STRUCT          SWITCH          THIS            TRUE
 %token TYPEDEF      UNSIGNED        VIRTUAL         VOID            WHILE
 
-/* End of file */
-%token ENDOFFILE
-
 /* Operator associativity */
 %left "::" '.' "->" ".*" "->*" '*' '/' '%' '+' '-' "<<" ">>" 
 %left '<' '>' "<=" ">=" "==" "!=" '&' '^' '|' "&&" "||" ','
@@ -82,7 +87,43 @@
 
 
 /* non-terminals */
+%type<ast::Ptr<ast::LiteralExpression>> literal
+%type<ast::Ptr<ast::IntLiteral>> int_literal
+%type<ast::Ptr<ast::CharLiteral>> char_literal
+%type<ast::Ptr<ast::FloatLiteral>> float_literal
+%type<ast::Ptr<ast::StringLiteral>> string_literal
+%type<ast::Ptr<ast::BoolLiteral>> boolean_literal
 
+%type<ast::Ptr<ast::Expression>> primary_expression postfix_expression unary_expression new_expression
+%type<ast::Ptr<ast::Expression>> delete_expression cast_expression pm_expression multiplicative_expression
+%type<ast::Ptr<ast::Expression>> additive_expression shift_expression relational_expression equality_expression
+%type<ast::Ptr<ast::Expression>> and_expression exclusive_or_expression inclusive_or_expression logical_and_expression
+%type<ast::Ptr<ast::Expression>> logical_or_expression conditional_expression assignment_expression constant_expression
+%type<ast::Ptr<ast::Expression>> expression expression_opt
+%type<ast::Ptr<ast::IdExpression>> id_expression unqualified_id qualified_id
+%type<UnaryOp> unary_operator
+
+%type<ast::Ptr<ast::NameSpecifier>> name_specifier nested_name_specifier
+
+%type<ast::PtrVec<ast::Declaration>> declaration_seq
+%type<ast::Ptr<ast::Declaration>> declaration
+%type<ast::Ptr<ast::BlockDeclaration>> block_declaration simple_declaration
+%type<ast::Ptr<ast::DeclSpecifier>> decl_specifier_seq decl_specifier function_specifier
+%type<ast::Ptr<ast::TypeSpecifier>> type_specifier
+%type<FundTypePart> simple_type_specifier
+%type<ast::Ptr<ast::ElaboratedTypeSpecifier>> elaborated_type_specifier type_name
+%type<ast::Ptr<ast::EnumSpecifier>> enum_specifier enumerator_list
+%type<ast::EnumSpecifier::Enumerator> enumerator_definition
+
+%type<ast::Ptr<ast::FunctionDefinition>> function_definition
+
+%type<ast::Ptr<ast::ConversionFunctionId>> conversion_function_id conversion_type_id
+
+%type<ast::Ptr<ast::OperatorFunctionId>> operator_function_id
+%type<OverloadOperator> operator
+
+%type<bool> COLONCOLON_opt
+%type<std::string> identifier identifier_opt enumerator typedef_name class_name enum_name
 
 %start translation_unit
 
@@ -93,35 +134,40 @@
  * ------------------------------------------------------------------------- */
 
 identifier:
-    IDENTIFIER
+    IDENTIFIER                  { $$ = $1; }
 ;
 
 literal:
-    int_literal
-|   char_literal
-|   float_literal
-|   string_literal
-|   boolean_literal
+    int_literal                 { $$ = $1; }
+|   char_literal                { $$ = $1; }
+|   float_literal               { $$ = $1; }
+|   string_literal              { $$ = $1; }
+|   boolean_literal             { $$ = $1; }
 ;
 
 int_literal:
     INTVAL
+        { $$ = MkNode<IntLiteral>(); $$->value = $1; }
 ;
 
 char_literal:
     CHARVAL
+        { $$ = MkNode<CharLiteral>(); $$->value = $1; }
 ;
 
 float_literal:
-    FLOATVAL;
+    FLOATVAL
+        { $$ = MkNode<FloatLiteral>(); $$->value = $1; }
 ;
 
 string_literal:
     STRVAL
+        { $$ = MkNode<StringLiteral>(); $$->value = $1; }
 ;
 
 boolean_literal:
     BOOLVAL
+        { $$ = MkNode<BoolLiteral>(); $$->value = $1; }
 ;
 
 
@@ -130,15 +176,15 @@ boolean_literal:
  * ------------------------------------------------------------------------- */
 
 typedef_name:
-    TYPEDEF identifier
+    TYPEDEF identifier          { $$ = $2; }
 ;
 
 class_name:
-    CLASS identifier
+    CLASS identifier            { $$ = $2; }
 ;
 
 enum_name:
-    ENUM identifier
+    ENUM identifier             { $$ = $2; }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -146,7 +192,9 @@ enum_name:
  * ------------------------------------------------------------------------- */
 
 translation_unit:
-    declaration_seq_opt ENDOFFILE
+        { astRoot = MkNode<TranslationUnit>(); }
+|   declaration_seq
+        { astRoot = MkNode<TranslationUnit>(); astRoot->decls = $1; }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -154,33 +202,58 @@ translation_unit:
  * ------------------------------------------------------------------------- */
 
 primary_expression:
-    literal
-|   THIS
-|   '(' expression ')'
-|   id_expression
+    literal                     { $$ = $1; }
+|   THIS                        { $$ = MkNode<ThisExpression>(); }
+|   '(' expression ')'          { $$ = $2; }
+|   id_expression               { $$ = $1; }
 ;
 
 id_expression:
-    unqualified_id
-|   qualified_id
+    unqualified_id              { $$ = $1; }
+|   qualified_id                { $$ = $1; }
 ;
 
 unqualified_id:
     identifier
+        { $$ = MkNode<IdExpression>(); $$->identifier = $1; }
 |   operator_function_id
+        { $$ = $1; }
 |   conversion_function_id
+        { $$ = $1; }
 |   '~' class_name
+        {
+            $$ = MkNode<IdExpression>(); 
+            $$->identifier = $2; 
+            $$->isDestructor = true;
+        }
 ;
 
 qualified_id:
-    COLONCOLON_opt nested_name_specifier unqualified_id
+    name_specifier unqualified_id
+        { $$ = $2; $$->nameSpec = $1; }
 |   "::" identifier
+        {
+            $$ = MkNode<IdExpression>(); 
+            $$->identifier = $2;
+            $$->nameSpec = MkNode<NameSpecifier>(); 
+            $$->nameSpec->isGlobal = true;
+        }
 |   "::" operator_function_id
+        { $$ = $2; $$->isGlobal = true; }
+;
+
+name_specifier:
+    "::"
+        { $$ = MkNode<NameSpecifier>(); $$->isGlobal = true; }
+|   COLONCOLON_opt nested_name_specifier
+        { $$ = $2; $$->isGlobal = $1; }
 ;
 
 nested_name_specifier:
     class_name "::"
+        { $$ = MkNode<NameSpecifier>(); $$->path.push_back($1); }
 |   nested_name_specifier class_name "::"
+        { $$ = $1; $$->path.push_back($2); }
 ;
 
 postfix_expression:
@@ -202,27 +275,41 @@ expression_list:
 ;
 
 pseudo_destructor_name:
-    COLONCOLON_opt nested_name_specifier_opt type_name_COLONCOLON_opt '~' type_name
+    name_specifier_opt type_name_COLONCOLON_opt '~' type_name
 ;
 
 unary_expression:
-    postfix_expression
-|   "++" cast_expression
-|   "--" cast_expression
+    postfix_expression          
+        { $$ = $1; }
 |   unary_operator cast_expression
+        { 
+            $$ = MkNode<UnaryExpression>();
+            $$->op = $1;
+            $$->expr = $2;
+        }
 |   SIZEOF unary_expression
+        {
+            $$ = MkNode<UnaryExpression>();
+            $$->op = UnaryOp::SIZEOF;
+            $$->expr = $2;
+        }
 |   SIZEOF '(' type_id ')'
+        { $$ = MkNode<SizeofExpression>(); $$->typeId = $3; }
 |   new_expression
+        { $$ = $1; }
 |   delete_expression
+        { $$ = $1; }
 ;
 
 unary_operator:
-    '*' 
-|   '&' 
-|   '+' 
-|   '-' 
-|   '!' 
-|   '~'
+    '*'                         { $$ = UnaryOp::UNREF; }
+|   '&'                         { $$ = UnaryOp::ADDRESSOF; }
+|   '+'                         { $$ = UnaryOp::POSI; }
+|   '-'                         { $$ = UnaryOp::NEG; }
+|   '!'                         { $$ = UnaryOp::LOGINOT; }
+|   '~'                         { $$ = UnaryOp::NOT; }
+|   "++"                        { $$ = UnaryOp::PREINC; }
+|   "--"                        { $$ = UnaryOp::PREDEC; }
 ;
 
 new_expression:
@@ -392,9 +479,12 @@ statement_seq:
 ;
 
 selection_statement:
-    IF '(' condition ')' statement else_statement_opt
+    IF '(' condition ')' statement else_statement
 |   SWITCH '(' condition ')' statement
 ;
+
+else_statement:
+|   ELSE statement;
 
 condition:
     expression
@@ -427,88 +517,152 @@ declaration_statement:
  * ------------------------------------------------------------------------- */
 
 declaration_seq:
-    declaration
+    declaration_seq             { $$ = $1; }
 |   declaration_seq declaration
+        { $$ = $1; $$->decls.push_back($2); }
 ;
     
 declaration:
-    block_declaration
-|   function_definition
+    block_declaration           { $$ = $1; }
+|   function_definition         { $$ = $1; }
 ;
     
 block_declaration:
-    simple_declaration
+    simple_declaration          { $$ = $1; }
 ;
 
 simple_declaration:
     decl_specifier_seq_opt init_declarator_list_opt ';'
+        { 
+            $$ = MkNode<BlockDeclaration>();
+            $$->declSpec = $1;
+            $$->initDeclList = $2;
+        }
 ;
     
 decl_specifier:
     type_specifier
-|   function_specifier
+        { $$ = MkNode<DeclSpecifier>(); $$->typeSpec = $1; }
+|   function_specifier          
+        { $$ = $1; }
 |   FRIEND
+        { $$ = MkNode<DeclSpecifier>(); $$->isFriend = true; }
 |   TYPEDEF
+        { $$ = MkNode<DeclSpecifier>(); $$->isTypedef = true; }
 ;
     
 decl_specifier_seq:
     decl_specifier
+        { $$ = $1; }
 |   decl_specifier_seq decl_specifier
+        { 
+            $$ = $1;
+            auto ss = $$->combine($2);
+            if (ss)
+                throw syntax_error(yylloc, ss.moveMsg());
+        }
 ;
     
 function_specifier:
     VIRTUAL
+        { $$ = MkNode<DeclSpecifier>(); $$->isVirtual = true; }
 ;
 
 type_specifier:
-    simple_type_specifier
+    simple_type_specifier       
+        { $$ = MkNode<SimpleTypeSpecifier>(); $$->fundTypePart = $1; }
 |   class_specifier
+        { $$ = MkNode<ClassTypeSpecifier>(); $$->classType = $1; }
 |   enum_specifier
+        { $$ = MkNode<EnumTypeSpecifier>(); $$->enumType = $1; }
 |   elaborated_type_specifier
+        { $$ = $1; }
 |   cv_qualifier
+        { $$ = MkNode<TypeSpecifier>(); $$->cv = $1; }
 ;
     
 simple_type_specifier:
-    COLONCOLON_opt nested_name_specifier_opt type_name
-|   CHAR
-|   BOOL
-|   SHORT
-|   INT
-|   LONG
-|   SIGNED
-|   UNSIGNED
-|   FLOAT
-|   DOUBLE
-|   VOID
+    CHAR                        { $$ = FundTypePart::CHAR; }
+|   BOOL                        { $$ = FundTypePart::BOOL; }
+|   SHORT                       { $$ = FundTypePart::SHORT; }
+|   INT                         { $$ = FundTypePart::INT; }
+|   LONG                        { $$ = FundTypePart::LONG; }
+|   SIGNED                      { $$ = FundTypePart::SIGNED; }
+|   UNSIGNED                    { $$ = FundTypePart::UNSIGNED; }
+|   FLOAT                       { $$ = FundTypePart::FLOAT; }
+|   DOUBLE                      { $$ = FundTypePart::DOUBLE; }
+|   VOID                        { $$ = FundTypePart::CHAR; }
 ;
     
 type_name:
     class_name
+        { 
+            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
+            $$->typeName = $1;
+        }
 |   enum_name
+        { 
+            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
+            $$->typeName = $1;
+        }
 |   typedef_name
+        { 
+            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$->typeClass = ElaboratedTypeSpecifier::TYPEDEFNAME;
+            $$->typeName = $1;
+        }
 ;
     
 elaborated_type_specifier:
-    class_key COLONCOLON_opt nested_name_specifier_opt identifier
-|   ENUM COLONCOLON_opt nested_name_specifier_opt identifier
+    name_specifier_opt type_name
+        { $$ = $2; $$->nameSpec = $1; }
+|   class_key name_specifier_opt identifier
+        { 
+            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
+            $$->typeName = $3;
+            $$->nameSpec = $2;
+        }
+|   ENUM name_specifier_opt identifier
+        { 
+            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
+            $$->typeName = $3;
+            $$->nameSpec = $2;
+        }
 ;
     
 enum_specifier:
-    ENUM identifier_opt '{' enumerator_list_opt '}'
+    ENUM identifier_opt '{' '}'
+        {
+            $$ = MkNode<EnumSpecifier>();
+            $$->identifier = $2;
+        }
+|   ENUM identifier_opt '{' enumerator_list '}'
+        {
+            $$ = $4;
+            $$->identifier = $2;
+        }
 ;
     
 enumerator_list:
     enumerator_definition 
+        { $$ = MkNode<EnumSpecifier>(); $$->enumList.push_back($1); }
 |   enumerator_list ',' enumerator_definition
+        { $$ = $1; $$->enumList.push_back($3); }
 ;
     
 enumerator_definition:
     enumerator
+        { $$.first = $1; }
 |   enumerator '=' constant_expression
+        { $$.first = $1; $$.second = $2; }
 ;
     
 enumerator:
-    identifier
+    identifier                  { $$ = $1; }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -517,7 +671,9 @@ enumerator:
 
 init_declarator_list:
     init_declarator
+        { return nullptr; /* TODO */ }
 |   init_declarator_list ',' init_declarator
+        { return nullptr; /* TODO */ }
 ;
 
 init_declarator:
@@ -538,7 +694,7 @@ direct_declarator:
 ptr_operator:
     '*' cv_qualifier_opt
 |   '&'
-|   COLONCOLON_opt nested_name_specifier '*' cv_qualifier_opt
+|   name_specifier '*' cv_qualifier_opt
 ;
     
 cv_qualifier:
@@ -547,7 +703,7 @@ cv_qualifier:
 
 declarator_id:
     id_expression
-|   COLONCOLON_opt nested_name_specifier_opt type_name
+|   name_specifier_opt type_name
 ;
 
 type_id:
@@ -630,7 +786,7 @@ member_specification:
 member_declaration:
     decl_specifier_seq_opt member_declarator_list_opt ';'
 |   function_definition COMMA_opt
-|   COLONCOLON_opt nested_name_specifier unqualified_id ';'
+|   name_specifier unqualified_id ';'
 ;
 
 member_declarator_list:
@@ -660,8 +816,8 @@ base_clause:
 ;
 
 base_specifier:
-    COLONCOLON_opt nested_name_specifier_opt class_name
-|   access_specifier COLONCOLON_opt nested_name_specifier_opt class_name
+    name_specifier_opt class_name
+|   access_specifier name_specifier_opt class_name
 ;
 
 access_specifier:
@@ -675,7 +831,7 @@ access_specifier:
  * ------------------------------------------------------------------------- */
 
 conversion_function_id:
-    operator conversion_type_id
+    operator conversion_type_id { $$ = $1; }
 ;
 
 conversion_type_id:
@@ -700,57 +856,58 @@ mem_initializer:
 ;
 
 mem_initializer_id:
-    COLONCOLON_opt nested_name_specifier_opt class_name
+    name_specifier_opt class_name
 |   identifier
 ;
 
 /* ------------------------------------------------------------------------- *
- * 10. Overloading
+ * 10. Operator overloading
  * ------------------------------------------------------------------------- */
 
 operator_function_id:
     OPERATOR operator
+        { $$ = MkNode<OperatorFunctionId>(); $$->overloadOp = $2; }
 ;
-    
+
 operator:
-    '+' 
-|   '-' 
-|   '*' 
-|   '/' 
-|   '%' 
-|   '^' 
-|   '&' 
-|   '|' 
-|   '~'
-|   '!' 
-|   '=' 
-|   '<' 
-|   '>' 
-|   "+=" 
-|   "-=" 
-|   "*=" 
-|   "/=" 
-|   "%="
-|   "~=" 
-|   "&=" 
-|   "|=" 
-|   "<<" 
-|   ">>" 
-|   ">>=" 
-|   "<<=" 
-|   "==" 
-|   "!="
-|   "<=" 
-|   ">=" 
-|   "&&" 
-|   "||" 
-|   "++" 
-|   "--" 
-|   ','
-|   "->*"
-|   "->"
-|   "()" 
-|   "[]"
+    '+'                         { $$ = OverloadOperator::ADD; }
+|   '-'                         { $$ = OverloadOperator::SUB; }
+|   '*'                         { $$ = OverloadOperator::MUL; }
+|   '/'                         { $$ = OverloadOperator::DIV; }
+|   '%'                         { $$ = OverloadOperator::MOD; }
+|   '^'                         { $$ = OverloadOperator::XOR; }
+|   '&'                         { $$ = OverloadOperator::AND; }
+|   '|'                         { $$ = OverloadOperator::OR; }
+|   '~'                         { $$ = OverloadOperator::NOT; }
+|   '!'                         { $$ = OverloadOperator::LOGINOT; }
+|   '='                         { $$ = OverloadOperator::ASSIGN; }
+|   '<'                         { $$ = OverloadOperator::LT; }
+|   '>'                         { $$ = OverloadOperator::GT; }
+|   "+="                        { $$ = OverloadOperator::SELFADD; }
+|   "-="                        { $$ = OverloadOperator::SELFSUB; }
+|   "*="                        { $$ = OverloadOperator::SELFMUL; }
+|   "/="                        { $$ = OverloadOperator::SELFDIV; }
+|   "%="                        { $$ = OverloadOperator::SELFMOD; }
+|   "~="                        { $$ = OverloadOperator::SELFXOR; }
+|   "&="                        { $$ = OverloadOperator::SELFAND; }
+|   "|="                        { $$ = OverloadOperator::SELFOR; }
+|   "<<"                        { $$ = OverloadOperator::SHL; }
+|   ">>"                        { $$ = OverloadOperator::SHR; }
+|   "<<="                       { $$ = OverloadOperator::SELFSHL; }
+|   ">>="                       { $$ = OverloadOperator::SELFSHR; }
+|   "=="                        { $$ = OverloadOperator::EQ; }
+|   "!="                        { $$ = OverloadOperator::NE; }
+|   "<="                        { $$ = OverloadOperator::LE; }
+|   ">="                        { $$ = OverloadOperator::GE; }
+|   "&&"                        { $$ = OverloadOperator::LOGIAND; }
+|   "||"                        { $$ = OverloadOperator::LOGIOR; }
+|   "++"                        { $$ = OverloadOperator::SELFINC; }
+|   "--"                        { $$ = OverloadOperator::SELFDEC; }
+|   ','                         { $$ = OverloadOperator::COMMA; }
+|   "->*"                       { $$ = OverloadOperator::ARROWSTAR; }
+|   "->"                        { $$ = OverloadOperator::ARROW; }
+|   "()"                        { $$ = OverloadOperator::CALL; }
+|   "[]"                        { $$ = OverloadOperator::SUBSCRIPT; }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -760,21 +917,34 @@ operator:
 COLONCOLON_opt: | "::" ;
 COMMA_opt: | ',';
 
-declaration_seq_opt: | declaration_seq;
 expression_list_opt: | expression_list ;
-nested_name_specifier_opt: | nested_name_specifier;
+name_specifier_opt: | name_specifier;
 type_name_COLONCOLON_opt: | type_name "::";
 new_placememt_opt: | new_placememt;
 new_initializer_opt: | new_initializer;
 new_declarator_opt: | new_declarator;
-expression_opt: | expression;
-statement_seq_opt: | statement_seq;
-else_statement_opt: | ELSE statement;
-condition_opt: | condition;
-decl_specifier_seq_opt: | decl_specifier_seq;
-init_declarator_list_opt: | init_declarator_list;
+
+expression_opt:                 { $$ = nullptr; }
+|   expression                  { $$ = $1; }
+;
+
+statement_seq_opt:              { $$ = nullptr; }
+|   statement_seq               { $$ = $1; }
+;
+
+condition_opt:                  { $$ = nullptr; }
+|   condition                   { $$ = $1; }
+;
+
+decl_specifier_seq_opt:         { $$ = nullptr; }
+|   decl_specifier_seq          { $$ = $1; }
+;
+
+init_declarator_list_opt:       { $$ = nullptr; }
+|   init_declarator_list        { $$ = $1; }
+;
+
 identifier_opt: | identifier;
-enumerator_list_opt: | enumerator_list;
 initializer_opt: | initializer;
 parameter_declaration_list_opt: | parameter_declaration_list;
 cv_qualifier_opt: | cv_qualifier;

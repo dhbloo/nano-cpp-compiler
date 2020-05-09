@@ -172,10 +172,8 @@ boolean_literal         "false"|"true"
                           return yy::parser::token::IDENTIFIER; }
 
 {ws}+                   { /* Throw away whitespace */ }
-\n+                     { yycolumn = 1; }
+\n+                     { yycolumn = 1; yylloc->initialize(nullptr, yylineno, yycolumn); }
 .                       { throw yy::parser::syntax_error(*yylloc, "invalid character: " + std::string(yytext, yyleng)); }
-
-<<EOF>>                 { return yy::parser::token::ENDOFFILE; }
 
 
 %%

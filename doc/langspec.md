@@ -162,9 +162,13 @@ unqualified-id:
     '~' class-name
 
 qualified-id:
-    ['::'] nested-name-specifier unqualified-id
+    name-specifier unqualified-id
     '::' identifier
     '::' operator-function-id
+    
+name-specifier:
+	'::'
+	['::'] nested-name-specifier
     
 nested-name-specifier:
 	class-name '::'
@@ -187,12 +191,10 @@ expression-list:
     expression-list ',' assignment-expression
 
 pseudo-destructor-name:
-    ['::'] [nested-name-specifier] [type-name '::'] '~' type-name
+    [name-specifier] [type-name '::'] '~' type-name
 
 unary-expression:
     postfix-expression
-    '++' cast-expression
-    '--' cast-expression
     unary-operator cast-expression
     'sizeof' unary-expression
     'sizeof' '(' type-id ')'
@@ -206,6 +208,8 @@ unary-operator:
     '-' 
     '!' 
     '~'
+    '++'
+    '--'
     
 new-expression:
 	['::'] 'new' [new-placement] new-type-id [new-initializer]
@@ -410,7 +414,6 @@ type-specifier:
     cv-qualifier
     
 simple-type-specifier:
-    ['::'] [nested-name-specifier] type-name
     'char'
     'bool'
     'short'
@@ -428,8 +431,9 @@ type-name:
     typedef-name
     
 elaborated-type-specifier:
-    class-key ['::'] [nested-name-specifier] identifier
-    'enum' ['::'] [nested-name-specifier] identifier
+	[name-specifier] type-name
+    class-key [name-specifier] identifier
+    'enum' [name-specifier] identifier
     
 enum-specifier:
 	'enum' [identifier] '{' [enumerator-list] '}'
@@ -468,14 +472,14 @@ direct-declarator:
 ptr-operator:
     '*' [cv-qualifier]
     '&'
-    ['::'] nested-name-specifier '*' [cv-qualifier]
+    name-specifier '*' [cv-qualifier]
     
 cv-qualifier:
 	'const'
 
 declarator-id:
     id-expression
-    ['::'] [nested-name-specifier] type-name
+    [name-specifier] type-name
 
 type-id:
 	type-specifier-seq [abstract-declarator]
@@ -542,7 +546,7 @@ member-specification:
 member-declaration:
     [decl-specifier-seq] [member-declarator-list] ';'
     function-definition [';']
-    ['::'] nested-name-specifier unqualified-id ';'
+    name-specifier unqualified-id ';'
 
 member-declarator-list:
     member-declarator
@@ -566,8 +570,8 @@ base-clause:
 	':' base-specifier
 
 base-specifier:
-    ['::'] [nested-name-specifier] class-name
-    access-specifier ['::'] [nested-name-specifier] class-name
+    [name-specifier] class-name
+    access-specifier [name-specifier] class-name
 
 access-specifier:
     'private'
@@ -579,7 +583,7 @@ access-specifier:
 
 ```
 conversion-function-id:
-	operator conversion-type-id
+	'operator' conversion-type-id
 
 conversion-type-id:
 	type-specifier-seq [conversion-declarator]
@@ -598,11 +602,11 @@ mem-initializer:
 	mem-initializer-id '(' [expression-list] ')'
 
 mem-initializer-id:
-	['::'] [nested-name-specifier] class-name
+	[name-specifier] class-name
 	identifier
 ```
 
-### 10. 重载
+### 10. 运算符重载
 
 ```
 operator-function-id:
