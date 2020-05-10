@@ -15,6 +15,9 @@ enum class UnaryOp {
 };
 
 enum class BinaryOp {
+    SUBSCRIPT,
+    DOT,
+    ARROW,
     DOTSTAR,
     ARROWSTAR,
     MUL,
@@ -34,7 +37,8 @@ enum class BinaryOp {
     XOR,
     OR,
     LOGIAND,
-    LOGIOR
+    LOGIOR,
+    COMMA
 };
 
 enum class AssignOp {
@@ -51,7 +55,7 @@ enum class AssignOp {
     SELFOR
 };
 
-enum class OverloadOperator {
+enum class Operator {
     ADD,
     SUB,
     MUL,

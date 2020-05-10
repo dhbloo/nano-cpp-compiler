@@ -21,26 +21,28 @@ struct NameSpecifier;
 // Expression
 
 struct Expression;
+struct AssignmentExpression;
+struct ConditionalExpression;
+struct BinaryExpression;
+struct CastExpression;
+struct UnaryExpression;
+struct CallExpression;
+struct SizeofExpression;
+struct NewExpression;
+struct PlainNew;
+struct InitializableNew;
+struct DeleteExpression;
+struct IdExpression;
+struct ThisExpression;
 
+struct LiteralExpression;
 struct IntLiteral;
 struct FloatLiteral;
 struct CharLiteral;
 struct StringLiteral;
 struct BoolLiteral;
 
-struct LiteralExpression;
-struct IdExpression;
-struct ThisExpression;
-
-struct UnaryExpression;
-struct SizeofExpression;
-
-struct NewExpression;
-struct DeleteExpression;
-struct CastExpression;
-struct BinaryExpression;
-struct ConditionalExpression;
-struct AssignmentExpression;
+struct ExpressionList;
 
 // Statement
 
@@ -49,7 +51,6 @@ struct CaseStatement;
 struct DefaultStatement;
 struct ExpressionStatement;
 struct CompoundStatement;
-struct Condition;
 struct IfStatement;
 struct SwitchStatement;
 struct IterationStatement;
@@ -65,28 +66,38 @@ struct Declaration;
 struct BlockDeclaration;
 struct DeclSpecifier;
 struct TypeSpecifier;
+struct SimpleTypeSpecifier;
+struct ElaboratedTypeSpecifier;
+struct ClassTypeSpecifier;
+struct EnumTypeSpecifier;
 struct EnumSpecifier;
 
 // Declarator
 
 struct InitDeclarator;
 struct PtrSpecifier;
-struct AbstractDeclarator;
 struct Declarator;
+struct FunctionDeclarator;
+struct ArrayDeclarator;
+struct IdDeclarator;
+struct NestedDeclarator;
 struct TypeId;
 struct ParameterDeclaration;
 struct FunctionDefinition;
 struct Initializer;
-struct InitializerClause;
+struct ClauseInitializer;
+struct AssignmentInitializer;
+struct ListInitializer;
+struct ParenthesisInitializer;
 
 // Class
 
 struct ClassSpecifier;
+struct MemberList;
 struct MemberDeclaration;
 struct MemberVariable;
 struct MemberDeclarator;
 struct MemberFunction;
-struct MemberIdentifier;
 
 // Derived class
 
@@ -150,7 +161,7 @@ private:
 
 struct Node
 {
-    virtual void Print(std::ostream &os, Indent indent) const = 0;
+    virtual void Print(std::ostream &os, Indent indent) const /* = 0*/;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -206,7 +217,7 @@ struct BinaryExpression : Expression
 
 struct CastExpression : Expression
 {
-    // TODO: type-id
+    Ptr<TypeId>     typeId;
     Ptr<Expression> expr;
 
     void Print(std::ostream &os, Indent indent) const override;
@@ -220,6 +231,12 @@ struct UnaryExpression : Expression
     void Print(std::ostream &os, Indent indent) const override;
 };
 
+struct CallExpression : Expression
+{
+    Ptr<Expression>     funcExpr;
+    Ptr<ExpressionList> params;  // opt
+};
+
 struct SizeofExpression : Expression
 {
     Ptr<TypeId> typeId;
@@ -227,11 +244,22 @@ struct SizeofExpression : Expression
 
 struct NewExpression : Expression
 {
-    // TODO: type-id
-    Ptr<Expression>    placement;
-    PtrVec<Expression> initializer;
+    Ptr<ExpressionList> placement;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
+};
+
+struct PlainNew : NewExpression
+{
+    Ptr<TypeId> typeId;
+};
+
+struct InitializableNew : NewExpression
+{
+    Ptr<TypeSpecifier>  typeSpec;
+    Ptr<PtrSpecifier>   ptrSpec;  // opt
+    PtrVec<Expression>  arraySizes;
+    Ptr<ExpressionList> initializer;  // opt
 };
 
 struct DeleteExpression : Expression
@@ -244,9 +272,15 @@ struct DeleteExpression : Expression
 
 struct IdExpression : Expression
 {
-    Ptr<NameSpecifier> nameSpec;
+    Ptr<NameSpecifier> nameSpec;  // opt
     std::string        identifier;
     bool               isDestructor;
+};
+
+struct DestructorExpression : Expression
+{
+    Ptr<NameSpecifier>           nameSpec;  // opt
+    Ptr<ElaboratedTypeSpecifier> typeName;
 };
 
 struct ThisExpression : Expression
@@ -292,6 +326,11 @@ struct BoolLiteral : LiteralExpression
     void Print(std::ostream &os, Indent indent) const override;
 };
 
+struct ExpressionList : Node
+{
+    PtrVec<Expression> exprList;
+};
+
 /* ------------------------------------------------------------------------- *
  * 3. Statement
  * ------------------------------------------------------------------------- */
@@ -312,7 +351,7 @@ struct DefaultStatement : Statement
 
 struct ExpressionStatement : Statement
 {
-    Ptr<Expression> expr;
+    Ptr<Expression> expr;  // opt
 };
 
 struct CompoundStatement : Statement
@@ -320,29 +359,22 @@ struct CompoundStatement : Statement
     PtrVec<Statement> stmts;
 };
 
-struct Condition : Node
-{
-    bool            hasDecl;
-    Ptr<Expression> expr;
-    // TODO: decl
-};
-
 struct IfStatement : Statement
 {
-    Ptr<Condition> condition;
-    Ptr<Statement> trueStmt, falseStmt;
+    Ptr<Expression> condition;
+    Ptr<Statement>  trueStmt, falseStmt;
 };
 
 struct SwitchStatement : Statement
 {
-    Ptr<Condition> condition;
-    Ptr<Statement> stmt;
+    Ptr<Expression> condition;
+    Ptr<Statement>  stmt;
 };
 
 struct WhileStatement : Statement
 {
-    Ptr<Condition> condition;
-    Ptr<Statement> stmt;
+    Ptr<Expression> condition;
+    Ptr<Statement>  stmt;
 };
 
 struct DoStatement : Statement
@@ -353,9 +385,15 @@ struct DoStatement : Statement
 
 struct ForStatement : Statement
 {
-    // TODO: for-init
-    Ptr<Condition>  condition;
-    Ptr<Expression> iterExpr;
+    enum InitType { EXPR, DECL };
+
+    // for-init
+    InitType                 initType;
+    Ptr<ExpressionStatement> exprInit;
+    Ptr<BlockDeclaration>    declInit;
+
+    Ptr<Expression> condition;  // opt
+    Ptr<Expression> iterExpr;   // opt
     Ptr<Statement>  stmt;
 };
 
@@ -364,7 +402,7 @@ struct JumpStatement : Statement
     enum JType { BREAK, CONTINUE, RETURN };
 
     JType           type;
-    Ptr<Expression> retExpr;
+    Ptr<Expression> retExpr;  // opt
 };
 
 struct DeclerationStatement : Statement
@@ -390,12 +428,14 @@ struct DeclSpecifier : Node
     bool               isFriend, isVirtual, isTypedef;
     Ptr<TypeSpecifier> typeSpec;
 
-    SyntaxStatus combine(Ptr<DeclSpecifier> other);
+    SyntaxStatus Combine(Ptr<DeclSpecifier> other);
 };
 
 struct TypeSpecifier : Node
 {
     CVQualifier cv;
+
+    SyntaxStatus Combine(Ptr<TypeSpecifier> other);
 };
 
 struct SimpleTypeSpecifier : TypeSpecifier
@@ -407,8 +447,10 @@ struct ElaboratedTypeSpecifier : TypeSpecifier
 {
     enum TypeClass { CLASSNAME, ENUMNAME, TYPEDEFNAME };
     TypeClass          typeClass;
-    Ptr<NameSpecifier> nameSpec;
+    Ptr<NameSpecifier> nameSpec;  // opt
     std::string        typeName;
+
+    bool operator==(const ElaboratedTypeSpecifier &other);
 };
 
 struct ClassTypeSpecifier : TypeSpecifier
@@ -425,7 +467,7 @@ struct EnumSpecifier : Node
 {
     using Enumerator = std::pair<std::string, Ptr<Expression>>;
 
-    std::string             identifier;
+    std::string             identifier;  // opt
     std::vector<Enumerator> enumList;
 };
 
@@ -436,76 +478,91 @@ struct EnumSpecifier : Node
 struct InitDeclarator : Node
 {
     Ptr<Declarator>  declarator;
-    Ptr<Initializer> initializer;
+    Ptr<Initializer> initializer;  // opt
 };
 
 struct PtrSpecifier : Node
 {
-    enum PtrType { NO, PTR, REF, CLASSPTR };
+    enum PtrType { PTR, REF, CLASSPTR };
 
-    PtrType            ptrType;
-    bool               isPtrConst;
-    Ptr<NameSpecifier> classNameSpec;
+    struct PtrOp
+    {
+        PtrType            ptrType;
+        bool               isPtrConst;
+        Ptr<NameSpecifier> classNameSpec;
+    };
+
+    std::vector<PtrOp> ptrList;
 };
 
-struct AbstractDeclarator : Node
+struct Declarator : Node
 {
-    Ptr<PtrSpecifier> ptrSpec;
+    Ptr<PtrSpecifier> ptrSpec;  // opt
+};
 
-    // function
-    PtrVec<ParameterDeclaration> funcParamList;
+struct FunctionDeclarator : Declarator
+{
+    Ptr<Declarator>              retType;  // opt when abstract
+    PtrVec<ParameterDeclaration> params;
     bool                         isFuncConst;
-
-    // array
-    Ptr<Expression>         arraySize;
-    Ptr<AbstractDeclarator> arrayDecl;
 };
 
-struct Declarator : AbstractDeclarator
+struct ArrayDeclarator : Declarator
 {
-    enum IdType { IDEXPR, TYPENAME };
+    Ptr<Declarator> elemType;  // opt when abstract
+    Ptr<Expression> size;
+};
 
-    IdType            idType;
-    Ptr<IdExpression> declId;
+struct IdDeclarator : Declarator
+{
+    Ptr<IdExpression> id;
+};
 
-    Ptr<NameSpecifier> typeNameSpec;
-    std::string        typeName;
+struct NestedDeclarator : Declarator
+{
+    Ptr<Declarator> decl;
 };
 
 struct TypeId : Node
 {
-    Ptr<TypeSpecifier>      typeSpec;
-    Ptr<AbstractDeclarator> abstractDecl;
+    Ptr<TypeSpecifier> typeSpec;
+    Ptr<Declarator>    abstractDecl;  // opt
 };
 
 struct ParameterDeclaration : Node
 {
-    Ptr<DeclSpecifier>        declSpec;
-    Ptr<AbstractDeclarator>   decl;
-    Ptr<AssignmentExpression> assignExpr;
+    Ptr<DeclSpecifier> declSpec;
+    Ptr<Declarator>    decl;         // opt when abstract
+    Ptr<Expression>    defaultExpr;  // opt
 };
 
 struct FunctionDefinition : Declaration
 {
-    Ptr<DeclSpecifier>            declSpec;
+    Ptr<DeclSpecifier>            declSpec;  // opt for constructor/destructor/conversion
     Ptr<Declarator>               declarator;
-    PtrVec<CtorMemberInitializer> ctorInitList;
+    PtrVec<CtorMemberInitializer> ctorInitList;  // opt
     Ptr<CompoundStatement>        funcBody;
 };
 
 struct Initializer : Node
-{
-    // type 1 init
-    Ptr<InitializerClause> init;
+{};
 
-    // type 2 init
-    PtrVec<Expression> exprList;
+struct ClauseInitializer : Initializer
+{};
+
+struct AssignmentInitializer : ClauseInitializer
+{
+    Ptr<Expression> expr;
 };
 
-struct InitializerClause : Node
+struct ListInitializer : ClauseInitializer
 {
-    Ptr<AssignmentExpression> assignExpr;
-    PtrVec<InitializerClause> initList;
+    PtrVec<ClauseInitializer> initList;
+};
+
+struct ParenthesisInitializer : Initializer
+{
+    Ptr<ExpressionList> exprList;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -517,11 +574,20 @@ struct ClassSpecifier : Node
     enum Key { CLASS, STRUCT };
 
     Key                key;
-    Ptr<NameSpecifier> nameSpec;
-    std::string        identifier;
-    Ptr<BaseSpecifier> baseSpec;
+    Ptr<NameSpecifier> nameSpec;    // opt
+    std::string        identifier;  // opt
+    Ptr<BaseSpecifier> baseSpec;    // opt
 
-    PtrVec<MemberDeclaration> publicMember, protectedMember, privateMember;
+    Ptr<MemberList> members;
+
+    void MoveDefaultMember();
+};
+
+struct MemberList : Node
+{
+    PtrVec<MemberDeclaration> publicMember, protectedMember, privateMember, defaultMember;
+
+    void MoveDefaultTo(Access access);
 };
 
 struct MemberDeclaration : Node
@@ -529,25 +595,20 @@ struct MemberDeclaration : Node
 
 struct MemberVariable : MemberDeclaration
 {
-    Ptr<DeclSpecifier> declSpec;
+    Ptr<DeclSpecifier>       declSpec;
+    PtrVec<MemberDeclarator> decls;
 };
 
 struct MemberDeclarator : Node
 {
-    Ptr<Declaration> decl;
-    Ptr<Expression>  constInit;
-    bool             isPure;
+    Ptr<Declarator> decl;
+    Ptr<Expression> constInit;
+    bool            isPure;
 };
 
 struct MemberFunction : MemberDeclaration
 {
     Ptr<FunctionDefinition> func;
-};
-
-struct MemberIdentifier : MemberDeclaration
-{
-    Ptr<NameSpecifier> nameSpec;
-    std::string        identifier;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -556,10 +617,8 @@ struct MemberIdentifier : MemberDeclaration
 
 struct BaseSpecifier : Node
 {
-    enum AccessSpec { DEFAULT, PRIVATE, PROTECTED, PUBLIC };
-
-    AccessSpec         accessSpec;
-    Ptr<NameSpecifier> nameSpec;
+    Access             access;
+    Ptr<NameSpecifier> nameSpec;  // opt
     std::string        className;
 };
 
@@ -570,14 +629,15 @@ struct BaseSpecifier : Node
 struct ConversionFunctionId : IdExpression
 {
     Ptr<TypeSpecifier> typeSpec;
-    Ptr<PtrSpecifier>  ptrSpec;
+    Ptr<PtrSpecifier>  ptrSpec;  // opt
 };
 
 struct CtorMemberInitializer : Node
 {
-    Ptr<NameSpecifier> nameSpec;
-    std::string        identifier;
-    PtrVec<Expression> exprList;
+    Ptr<NameSpecifier>  nameSpec;  // opt
+    std::string         identifier;
+    Ptr<ExpressionList> exprList;  // opt
+    bool                isBaseCtor;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -586,8 +646,8 @@ struct CtorMemberInitializer : Node
 
 struct OperatorFunctionId : IdExpression
 {
-    OverloadOperator overloadOp;
-    bool             isGlobal;
+    Operator overloadOp;
+    bool     isGlobal;
 };
 
 }  // namespace ast

@@ -8,15 +8,21 @@ Nano-cpp是C++的一个语言子集，该子集涵盖了C++的部分基本特性
 + 命名空间
 + 模版
 + RTTI
-+ C++ Style Cast（`static_cast`、`dynamic_cast`、`reinterpret_cast`、`const_cast`）
++ C++ Style Cast（`static_cast`、`dynamic_cast`、`reinterpret_cast`、`const_cast`、函数型cast如`int(x)`）
 + 联合体（Union）
 + 储存类型修饰符（`auto`、`register`、`static`、`extern`、`mutable`）
++ `using`语句
+
+还去除一些不常用的C++特性：
+
 + CV修饰符中的`volatile`
 + 函数修饰符中的`explicit`
 + `goto`语句
-+ 部分运算符重载（`new`、`delete`、`new[]`、`delete[]`）
++ 部分运算符重载（`new`、`delete`、`new[]`、`delete[]`），只保留全局`new`与`delete`
 + 位域
 + 可变参数
++ 条件内局部声明
++ 不定长数组声明
 
 特别的，为了进一步简化实现，仅支持单文件编译，因此以下语言特性也一并去除：
 
@@ -83,9 +89,9 @@ const			continue		default			delete			do
 double			else			enum			false			float
 for				friend			if				int				long
 new				operator		private			protected		public			
-register		return			short			signed			sizeof
-static			struct			switch			this			true
-typedef			unsigned		virtual			void			while
+return			short			signed			sizeof			static
+struct			switch			this			true			typedef
+unsigned		virtual			void			while
 ```
 
 ### 操作符
@@ -178,7 +184,6 @@ postfix-expression:
     primary-expression
     postfix-expression '[' expression ]
     postfix-expression '(' [expression-list] ')'
-    simple-type-specifier '(' [expression-list] ')'
     postfix-expression '.' id-expression
     postfix-expression '->' id-expression
     postfix-expression '.' pseudo-destructor-name
@@ -222,7 +227,7 @@ new-type-id:
     type-specifier-seq [new-declarator]
 
 new-declarator:
-	ptr-operator [new-declarator]
+	ptr-operator-list [direct-new-declarator]
     direct-new-declarator
 
 direct-new-declarator:
@@ -356,7 +361,6 @@ selection-statement:
 
 condition:
     expression
-    type-specifier-seq declarator '=' assignment-expression
     
 iteration-statement:
     'while' '(' condition ')' statement
@@ -391,7 +395,7 @@ block-declaration:
     simple-declaration
 
 simple-declaration:
-	[decl-specifier-seq] [init-declarator-list] ';'
+	decl-specifier-seq [init-declarator-list] ';'
 	
 decl-specifier:
     type-specifier
@@ -462,12 +466,17 @@ init-declarator:
 	
 declarator:
     direct-declarator
-    ptr-operator declarator
+    ptr-operator-list direct-declarator
 
 direct-declarator:
     declarator-id
     direct-declarator '(' [parameter-declaration-list] ')' [cv-qualifier]
-    direct-declarator '[' [constant-expression] ']' '(' declarator ')'
+    direct-declarator '[' [constant-expression] ']'
+    '(' declarator ')'
+
+ptr-operator-list:
+	ptr-operator
+	ptr-operator-list ptr-operator
 
 ptr-operator:
     '*' [cv-qualifier]
@@ -479,7 +488,6 @@ cv-qualifier:
 
 declarator-id:
     id-expression
-    [name-specifier] type-name
 
 type-id:
 	type-specifier-seq [abstract-declarator]
@@ -488,12 +496,13 @@ type-specifier-seq:
 	type-specifier [type-specifier-seq]
 	
 abstract-declarator:
-    ptr-operator [abstract-declarator]
+    ptr-operator-list [direct-abstract-declarator]
     direct-abstract-declarator
 
 direct-abstract-declarator:
 	[direct-abstract-declarator] '(' [parameter-declaration-list] ')' [cv-qualifier]
-	[direct-abstract-declarator] '[' [constant-expression] ']' '(' abstract-declarator ')'
+	[direct-abstract-declarator] '[' [constant-expression] ']' 
+	'(' abstract-declarator ')'
 
 parameter-declaration-list:
     parameter-declaration
@@ -532,8 +541,8 @@ class-specifier:
 	class-head '{' [member-specification] '}'
 
 class-head:
-    class-key [identifier] [base-clause]
-    class-key ['::'] nested-name-specifier identifier [base-clause]
+    class-key [base-clause]
+    class-key [name-specifier] identifier [base-clause]
 
 class-key:
     'class'
@@ -544,9 +553,8 @@ member-specification:
     access-specifier ':' [member-specification]
 
 member-declaration:
-    [decl-specifier-seq] [member-declarator-list] ';'
+    decl-specifier-seq [member-declarator-list] ';'
     function-definition [';']
-    name-specifier unqualified-id ';'
 
 member-declarator-list:
     member-declarator
@@ -589,7 +597,7 @@ conversion-type-id:
 	type-specifier-seq [conversion-declarator]
 
 conversion-declarator:
-	ptr-operator [conversion-declarator]
+	ptr-operator-list
 
 ctor-initializer:
 	':' mem-initializer-list
@@ -655,7 +663,7 @@ operator:
 
 ## 语义规则
 
-注：以下语境中，类泛指`class`或`struct`。本部分的表述并不完全，更细致的表述与C++03标准相同，可以参考C++03的标准文档。
+注：以下语境中，类泛指`class`或`struct`。本部分的表述并不完全，主要列出一些（与原始C++不同的）要点，其他更细致的表述与C++03标准相同，可以参考C++03的标准文档。
 
 ### 声明与定义
 
@@ -663,7 +671,7 @@ operator:
 2. 同一标识符在相同作用域内可以被声明多于一次，但第一次声明之后出现的声明必须与第一次出现的声明相符合。
 3. 单一定义原则（One definition rule）：翻译单元中变量、函数、类、枚举不能被定义多于一次。
 4. 声明了但没有定义的类、未知长度的数组、不完整类型的数组为不完整的类型。不完整的类型与`void`类型均不能用于声明对象。如果存在任何对象的类型不完整，则程序是病态的（ill-formed）。不完整的类型如果在之后被定义，则定义之后的类型是完整的。（注：不完整对象的引用或指针类型为完整类型，因为其内存大小已知）
-5. 在简单声明中，如果声明的是类或枚举，声明符列表（`init-declaration-list`）可以被省略。
+5. 在简单声明中，只有当声明的是类或枚举时，声明符列表（`init-declaration-list`）可以被省略。
 6. 当声明修饰符序列（`decl-specifier-seq`）中含有`typedef`时，声明被称作typedef声明，此时每个声明符被声明为typedef名字，是其关联的类型的同义词；否则，每个声明符根据其类型表示函数声明或对象声明。`typedef`不能用于函数定义，且不能与类型修饰符外的修饰符共同使用。`typedef`不能将同一作用域内的类型名再定义为另一种类型。
 7. 只有构造函数、析构函数、类型转换函数的`decl-specifier-seq`能被省略。
 8. 在`decl-specifier-seq`中，最多只能出现一个类型修饰符（`type-specifier`），除了以下情况：`const`可以与其他类型修饰符使用、`signed`/`unsigned`可以与`char`/`long`/`short`/`int`使用、`short`/`long`可以与`int`使用。以上3种特例中额外的修饰符每例最多只能出现一次。
@@ -676,7 +684,7 @@ operator:
 4. 在`if`、`while`、`for`、`switch`条件中声明的标识符作用域与对应的语句体内的标识符声明的作用域相同。
 5. 在类中的声明，其作用域不仅包括从定义点到类定义尾，也包括类的所有函数体、函数默认参数、构造函数初始化列表。
 6. 类成员名字只能用在类和其派生类作用域内、或其类和派生类对象/对象指针的`.`/`->`运算符后、或其类和派生类名的`::`作用域决议运算符后。
-7. 在同一作用域中，类名与枚举名可以被后面定义的对象标识符、函数标识符与枚举值标识符遮蔽。
+7. 在某一类名、枚举名、`typedef`名有效的作用域中，该类名、枚举名、`typedef`名**不能**被被任何新定义的对象、函数、枚举值标识符遮蔽。
 
 ### 名字查找
 
@@ -701,7 +709,7 @@ operator:
    + 布尔类型`bool`有2种取值：`true`和`false`。`bool`类型能够被隐式转换为整数类型。
    + 空类型`void`为不完整的类型，用于指定函数无返回值。其只能被用在表达式语句、逗号表达式操作数、选择表达式`?:`的第二、三操作数、返回类型为`void`的函数的返回语句表达式。`void`类型的表达式用于其他地方的程序为病态。
 2. 复合类型有以下几种：
-   + 数组
+   + 数组（数组的元素类型不能是引用、任何形式的`void`、函数、抽象类，数组的大小（如果指定）需要为非负的整数常量表达式）
    + 函数
    + 指向`void`或对象或函数（成员函数）或类成员的指针，其中`void*`被用作指向未知类型的指针，其表现与`char*`相同。
    + 对象或函数的引用
@@ -730,18 +738,21 @@ operator:
 
 1. 每一个表达式要么是左值（lvalue），要么是右值（rvalue）。左值可以被修改（出现在赋值表达式左侧），而右值不能被赋值。
 2. 当左值出现在需要右值的地方时，左值被自动转换为右值。
-3. 字符串字面量的类型为`const char[N]`，其中`N`为字符串本身的长度加1（字符串字面量末尾自动添加`\0`）。（注：此处与C++03略有不同）
+3. 字符串字面量的类型为`const char[N]`，其中`N`为字符串本身的长度加1（字符串字面量末尾自动添加`\0`）。
 
 ### 类
 
 1. 当类成员均是平凡类型，或是能被默认构造的，且类中没有定义构造函数，编译器会自动为该类生成一个默认构造函数。
 2. `virtual`函数修饰符只能用于类的非静态成员函数。
 3. `friend`修饰符只能用于修饰对类成员的访问权限。
+4. 派生类中定义的成员名称可以遮蔽其继承链上的任何类中的任何可访问（非`private`）的成员名称。
+5. 类在其完整定义的结尾`}`之后才被认为是完整类型，在此时前均是不完整类型。
+6. 类的成员初始化顺序与构造函数初始化列表中的顺序无关，其按照成员在类中定义的顺序进行。
 
 ### 程序
 
 1. 程序的起点为名为`main`的函数，该函数不应是重载的。函数的返回值应该声明为`int`。一般而言允许以下两种`main`的定义：
    + `int main() { /*... */ }`
-   + `int main(int argc, char* argv[]) { /*... */ }`
+   + `int main(int argc, char** argv) { /*... */ }`
 2. 有着静态储存周期的对象在程序开始前被常量表达式初始化或零初始化（若没有指定初始化表达式）。这些对静态储存周期对象的构造顺序与它们在翻译单元中的定义顺序相同。
 3. 静态储存周期对象的析构在程序结束后（`main`返回后）执行，其析构顺序与构造顺序相反。

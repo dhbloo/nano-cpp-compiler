@@ -104,7 +104,6 @@ boolean_literal         "false"|"true"
 "private"               { return yy::parser::token::PRIVATE; }
 "protected"             { return yy::parser::token::PROTECTED; }
 "public"                { return yy::parser::token::PUBLIC; }
-"register"              { return yy::parser::token::REGISTER; }
 "return"                { return yy::parser::token::RETURN; }
 "short"                 { return yy::parser::token::SHORT; }
 "signed"                { return yy::parser::token::SIGNED; }

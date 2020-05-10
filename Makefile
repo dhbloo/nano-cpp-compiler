@@ -1,7 +1,7 @@
 CXX = g++ -std=c++11 -Os
 
 yyparser: src/parser/ncc.y
-	cd src/parser && bison ncc.y
+	cd src/parser && bison ncc.y --report=state
 	$(CXX) -c -o bin/yyparser.o src/parser/yyparser.cpp
 
 yylexer: src/lexer/ncc.l yyparser

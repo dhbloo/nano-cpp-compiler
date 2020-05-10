@@ -33,3 +33,10 @@ enum class CVQualifier {
     NONE,
     CONST
 };
+
+enum class Access {
+    DEFAULT,
+    PUBLIC,
+    PROTECTED,
+    PRIVATE
+};

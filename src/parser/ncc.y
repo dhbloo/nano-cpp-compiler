@@ -73,11 +73,11 @@
 /* Keyword */
 %token BOOL         BREAK           CASE            CHAR            CLASS
 %token CONST        CONTINUE        DEFAULT         DELETE          DO
-%token DOUBLE       ELSE            ENUM            FALSE           FLOAT
+%token DOUBLE       ELSE            ENUM            FLOAT
 %token FOR          FRIEND          IF              INT             LONG
 %token NEW          OPERATOR        PRIVATE         PROTECTED       PUBLIC            
-%token REGISTER     RETURN          SHORT           SIGNED          SIZEOF
-%token STATIC       STRUCT          SWITCH          THIS            TRUE
+%token RETURN       SHORT           SIGNED          SIZEOF
+%token STATIC       STRUCT          SWITCH          THIS            
 %token TYPEDEF      UNSIGNED        VIRTUAL         VOID            WHILE
 
 /* Operator associativity */
@@ -94,35 +94,73 @@
 %type<ast::Ptr<ast::StringLiteral>> string_literal
 %type<ast::Ptr<ast::BoolLiteral>> boolean_literal
 
-%type<ast::Ptr<ast::Expression>> primary_expression postfix_expression unary_expression new_expression
-%type<ast::Ptr<ast::Expression>> delete_expression cast_expression pm_expression multiplicative_expression
-%type<ast::Ptr<ast::Expression>> additive_expression shift_expression relational_expression equality_expression
-%type<ast::Ptr<ast::Expression>> and_expression exclusive_or_expression inclusive_or_expression logical_and_expression
-%type<ast::Ptr<ast::Expression>> logical_or_expression conditional_expression assignment_expression constant_expression
-%type<ast::Ptr<ast::Expression>> expression expression_opt
+%type<ast::Ptr<ast::Expression>> primary_expression postfix_expression unary_expression equality_expression
+%type<ast::Ptr<ast::Expression>> cast_expression pm_expression multiplicative_expression logical_and_expression
+%type<ast::Ptr<ast::Expression>> additive_expression shift_expression relational_expression constant_expression
+%type<ast::Ptr<ast::Expression>> and_expression exclusive_or_expression inclusive_or_expression logical_or_expression
+%type<ast::Ptr<ast::Expression>> conditional_expression assignment_expression assignment_expression_opt
+%type<ast::Ptr<ast::Expression>> expression expression_opt condition condition_opt constant_initializer 
 %type<ast::Ptr<ast::IdExpression>> id_expression unqualified_id qualified_id
+%type<ast::Ptr<ast::DestructorExpression>> pseudo_destructor_name
+%type<ast::Ptr<ast::NewExpression>> new_expression
+%type<ast::Ptr<ast::DeleteExpression>> delete_expression
+%type<ast::Ptr<ast::ExpressionList>> expression_list expression_list_opt
+%type<ast::Ptr<ast::ExpressionList>> new_placememt new_placememt_opt new_initializer new_initializer_opt
+%type<ast::Ptr<ast::InitializableNew>> new_type_id new_declarator
+%type<ast::PtrVec<ast::Expression>> direct_new_declarator
+%type<ast::Ptr<ast::NameSpecifier>> name_specifier name_specifier_opt nested_name_specifier
+%type<AssignOp> assignment_operator
 %type<UnaryOp> unary_operator
 
-%type<ast::Ptr<ast::NameSpecifier>> name_specifier nested_name_specifier
+%type<ast::Ptr<ast::Statement>> statement labeled_statement selection_statement iteration_statement else_statement
+%type<ast::Ptr<ast::ExpressionStatement>> expression_statement
+%type<ast::Ptr<ast::CompoundStatement>> compound_statement statement_seq function_body
+%type<ast::Ptr<ast::ForStatement>> for_init_statement
+%type<ast::Ptr<ast::JumpStatement>> jump_statement
+%type<ast::Ptr<ast::DeclerationStatement>> declaration_statement
 
 %type<ast::PtrVec<ast::Declaration>> declaration_seq
 %type<ast::Ptr<ast::Declaration>> declaration
 %type<ast::Ptr<ast::BlockDeclaration>> block_declaration simple_declaration
-%type<ast::Ptr<ast::DeclSpecifier>> decl_specifier_seq decl_specifier function_specifier
-%type<ast::Ptr<ast::TypeSpecifier>> type_specifier
-%type<FundTypePart> simple_type_specifier
-%type<ast::Ptr<ast::ElaboratedTypeSpecifier>> elaborated_type_specifier type_name
+%type<ast::Ptr<ast::DeclSpecifier>> decl_specifier_seq decl_specifier_seq_opt decl_specifier function_specifier
+%type<ast::Ptr<ast::TypeSpecifier>> type_specifier type_specifier_seq
+%type<ast::Ptr<ast::ElaboratedTypeSpecifier>> elaborated_type_specifier type_name type_name_COLONCOLON_opt
 %type<ast::Ptr<ast::EnumSpecifier>> enum_specifier enumerator_list
 %type<ast::EnumSpecifier::Enumerator> enumerator_definition
+%type<FundTypePart> simple_type_specifier
+%type<CVQualifier> cv_qualifier
 
+%type<ast::PtrVec<ast::InitDeclarator>> init_declarator_list
+%type<ast::Ptr<ast::InitDeclarator>> init_declarator
+%type<ast::Ptr<ast::PtrSpecifier>> ptr_operator_list conversion_declarator conversion_declarator_opt
+%type<ast::PtrSpecifier::PtrOp> ptr_operator
+%type<ast::Ptr<ast::Declarator>> declarator direct_declarator abstract_declarator direct_abstract_declarator
+%type<ast::Ptr<ast::Declarator>> direct_abstract_declarator_opt abstract_declarator_opt
+%type<ast::Ptr<ast::IdDeclarator>> declarator_id
+%type<ast::Ptr<ast::TypeId>> type_id
+%type<ast::PtrVec<ast::ParameterDeclaration>> parameter_declaration_list
+%type<ast::Ptr<ast::ParameterDeclaration>> parameter_declaration
 %type<ast::Ptr<ast::FunctionDefinition>> function_definition
+%type<ast::Ptr<ast::Initializer>> initializer initializer_opt
+%type<ast::Ptr<ast::ClauseInitializer>> initializer_clause
+%type<ast::Ptr<ast::ListInitializer>> initializer_list
+
+%type<ast::Ptr<ast::ClassSpecifier>> class_specifier class_head
+%type<ast::ClassSpecifier::Key> class_key
+%type<ast::Ptr<ast::MemberList>> member_specification
+%type<ast::Ptr<ast::MemberDeclaration>> member_declaration
+%type<ast::PtrVec<ast::MemberDeclarator>> member_declarator_list
+%type<ast::Ptr<ast::MemberDeclarator>> member_declarator
+%type<ast::Ptr<ast::BaseSpecifier>> base_clause base_clause_opt base_specifier
+%type<Access> access_specifier
 
 %type<ast::Ptr<ast::ConversionFunctionId>> conversion_function_id conversion_type_id
-
+%type<ast::PtrVec<ast::CtorMemberInitializer>> ctor_initializer mem_initializer_list
+%type<ast::Ptr<ast::CtorMemberInitializer>> mem_initializer mem_initializer_id
 %type<ast::Ptr<ast::OperatorFunctionId>> operator_function_id
-%type<OverloadOperator> operator
+%type<Operator> operator
 
-%type<bool> COLONCOLON_opt
+%type<bool> COLONCOLON_opt cv_qualifier_opt pure_specifier_opt
 %type<std::string> identifier identifier_opt enumerator typedef_name class_name enum_name
 
 %start translation_unit
@@ -239,7 +277,7 @@ qualified_id:
             $$->nameSpec->isGlobal = true;
         }
 |   "::" operator_function_id
-        { $$ = $2; $$->isGlobal = true; }
+        { auto e = $2; e->isGlobal = true; $$ = std::move(e); }
 ;
 
 name_specifier:
@@ -258,24 +296,89 @@ nested_name_specifier:
 
 postfix_expression:
     primary_expression
+        { $$ = $1; }
 |   postfix_expression '[' expression ']'
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::SUBSCRIPT;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   postfix_expression '(' expression_list_opt ')'
-|   simple_type_specifier '(' expression_list_opt ')'
+        {
+            auto e = MkNode<CallExpression>();
+            e->funcExpr = $1;
+            e->params = $3;
+            $$ = std::move(e);
+        }
 |   postfix_expression '.' id_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::DOT;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   postfix_expression "->" id_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::ARROW;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   postfix_expression '.' pseudo_destructor_name
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::DOT;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   postfix_expression "->" pseudo_destructor_name
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::ARROW;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   postfix_expression "++"
+        {
+            auto e = MkNode<UnaryExpression>();
+            e->op = UnaryOp::POSTINC;
+            e->expr = $1;
+            $$ = std::move(e);
+        }
 |   postfix_expression "--"
+        {
+            auto e = MkNode<UnaryExpression>();
+            e->op = UnaryOp::POSTDEC;
+            e->expr = $1;
+            $$ = std::move(e);
+        }
 ;
 
 expression_list:
     assignment_expression
+        { $$ = MkNode<ExpressionList>(); $$->exprList.push_back($1); }
 |   expression_list ',' assignment_expression
+        { $$ = $1; $$->exprList.push_back($3); }
 ;
 
 pseudo_destructor_name:
     name_specifier_opt type_name_COLONCOLON_opt '~' type_name
+        {
+            $$ = MkNode<DestructorExpression>(); 
+            $$->typeName = $4;
+            $$->nameSpec = $1; 
+            
+            auto optName = $2;
+            if (optName && !(*($$->typeName) == *optName)) {
+                throw syntax_error(@2, "no destructor under this typename");
+            }
+        }
 ;
 
 unary_expression:
@@ -283,18 +386,24 @@ unary_expression:
         { $$ = $1; }
 |   unary_operator cast_expression
         { 
-            $$ = MkNode<UnaryExpression>();
-            $$->op = $1;
-            $$->expr = $2;
+            auto e = MkNode<UnaryExpression>();
+            e->op = $1;
+            e->expr = $2;
+            $$ = std::move(e);
         }
 |   SIZEOF unary_expression
         {
-            $$ = MkNode<UnaryExpression>();
-            $$->op = UnaryOp::SIZEOF;
-            $$->expr = $2;
+            auto e = MkNode<UnaryExpression>();
+            e->op = UnaryOp::SIZEOF;
+            e->expr = $2;
+            $$ = std::move(e);
         }
 |   SIZEOF '(' type_id ')'
-        { $$ = MkNode<SizeofExpression>(); $$->typeId = $3; }
+        {
+            auto e = MkNode<SizeofExpression>();
+            e->typeId = $3; 
+            $$ = std::move(e);
+        }
 |   new_expression
         { $$ = $1; }
 |   delete_expression
@@ -314,136 +423,371 @@ unary_operator:
 
 new_expression:
     COLONCOLON_opt NEW new_placememt_opt new_type_id new_initializer_opt
+        {
+            auto e = $4;
+            e->initializer = $5;
+            e->placement = $3;
+            $$ = std::move(e);
+        }
 |   COLONCOLON_opt NEW '(' type_id ')' new_placememt_opt
+        {
+            auto e = MkNode<PlainNew>();
+            e->typeId = $4;
+            e->placement = $6;
+            $$ = std::move(e);
+        }
 ;
 
 new_placememt:
-    '(' expression_list ')'
+    '(' expression_list ')'     { $$ = $2; }
 ;
 
 new_type_id:
-    type_specifier_seq new_declarator_opt
+    type_specifier_seq
+        {
+            $$ = MkNode<InitializableNew>();
+            $$->typeSpec = $1;
+        }
+|   type_specifier_seq new_declarator
+        { 
+            auto e = $2;
+            auto ss = e->typeSpec->Combine($1);
+            if (ss)
+                throw syntax_error(@$, ss.moveMsg());
+            $$ = std::move(e);
+        }
 ;
 
 new_declarator:
-    ptr_operator new_declarator_opt
+    ptr_operator_list direct_new_declarator
+        { 
+            $$ = MkNode<InitializableNew>();
+            $$->ptrSpec = $1;
+            $$->arraySizes = $2;
+        }
+|   ptr_operator_list
+        { 
+            $$ = MkNode<InitializableNew>();
+            $$->ptrSpec = $1;
+        }
 |   direct_new_declarator
+        { 
+            $$ = MkNode<InitializableNew>();
+            $$->arraySizes = $1;
+        }
 ;
 
 direct_new_declarator:
     '[' expression ']' 
+        { $$.push_back($2); }
 |   direct_new_declarator '[' constant_expression ']'
+        { $$ = $1; $$.push_back($3); }
 ;
     
 new_initializer:
-    '(' expression_list_opt ')'
+    '(' ')'
+        { $$ = MkNode<ExpressionList>(); }
+|   '(' expression_list ')'
+        { $$ = $2; }
 ;
 
 delete_expression:
     COLONCOLON_opt DELETE cast_expression
+        {
+            $$ = MkNode<DeleteExpression>();
+            $$->isArray = false;
+            $$->expr = $3;
+        }
 |   COLONCOLON_opt DELETE '[' ']' cast_expression
+        {
+            $$ = MkNode<DeleteExpression>();
+            $$->isArray = true;
+            $$->expr = $5;
+        }
 ;
 
 cast_expression:
-    unary_expression
+    unary_expression            
+        { $$ = $1; }
 |   '(' type_id ')' cast_expression
+        {
+            auto e = MkNode<CastExpression>();
+            e->typeId = $2;
+            e->expr = $4;
+            $$ = std::move(e);
+        }
 ;
 
 pm_expression:
-    cast_expression
+    cast_expression             
+        { $$ = $1; }
 |   pm_expression ".*" cast_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::DOTSTAR;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   pm_expression "->*" cast_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::ARROWSTAR;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 ;
 
 multiplicative_expression:
     pm_expression
+        { $$ = $1; }
 |   multiplicative_expression '*' pm_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::MUL;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   multiplicative_expression '/' pm_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::DIV;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   multiplicative_expression '%' pm_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::MOD;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 ;
 
 additive_expression:
     multiplicative_expression
+        { $$ = $1; }
 |   additive_expression '+' multiplicative_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::ADD;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   additive_expression '-' multiplicative_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::SUB;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 ;
 
 shift_expression:
     additive_expression
+        { $$ = $1; }
 |   shift_expression "<<" additive_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::SHL;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   shift_expression ">>" additive_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::SHR;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 ;
 
 relational_expression:
     shift_expression
+        { $$ = $1; }
 |   relational_expression '<' shift_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::LT;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   relational_expression '>' shift_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::GT;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   relational_expression "<=" shift_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::LE;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   relational_expression ">=" shift_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::GE;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 ;
 
 equality_expression:
     relational_expression
+        { $$ = $1; }
 |   equality_expression "==" relational_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::EQ;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 |   equality_expression "!=" relational_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::NE;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 ;
 
 and_expression:
     equality_expression
+        { $$ = $1; }
 |   and_expression '&' equality_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::AND;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 ;
 
 exclusive_or_expression:
     and_expression
+        { $$ = $1; }
 |   exclusive_or_expression '^' and_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::XOR;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 ;
 
 inclusive_or_expression:
     exclusive_or_expression
+        { $$ = $1; }
 |   inclusive_or_expression '|' exclusive_or_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::OR;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 ;
 
 logical_and_expression:
     inclusive_or_expression
+        { $$ = $1; }
 |   logical_and_expression "&&" inclusive_or_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::LOGIAND;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 ;
     
 logical_or_expression:
     logical_and_expression
+        { $$ = $1; }
 |   logical_or_expression "||" logical_and_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::LOGIOR;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 ;
 
 conditional_expression:
     logical_or_expression
+        { $$ = $1; }
 |   logical_or_expression '?' expression ':' assignment_expression
+        {
+            auto e = MkNode<ConditionalExpression>();
+            e->condition = $1;
+            e->trueExpr = $3;
+            e->falseExpr = $5;
+            $$ = std::move(e);
+        }
 ;
 
 assignment_expression:
     conditional_expression
+        { $$ = $1; }
 |   logical_or_expression assignment_operator assignment_expression
+        {
+            auto e = MkNode<AssignmentExpression>();
+            e->op = $2;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 ;
 
 assignment_operator:
-    '=' 
-|   "*=" 
-|   "/=" 
-|   "%="
-|   "+="
-|   "-=" 
-|   ">>=" 
-|   "<<=" 
-|   "&=" 
-|   "~=" 
-|   "|="
+    '='                         { $$ = AssignOp::ASSIGN; }
+|   "*="                        { $$ = AssignOp::SELFMUL; }
+|   "/="                        { $$ = AssignOp::SELFDIV; }
+|   "%="                        { $$ = AssignOp::SELFMOD; }
+|   "+="                        { $$ = AssignOp::SELFADD; }
+|   "-="                        { $$ = AssignOp::SELFSUB; }
+|   ">>="                       { $$ = AssignOp::SELFSHR; }
+|   "<<="                       { $$ = AssignOp::SELFSHL; }
+|   "&="                        { $$ = AssignOp::SELFAND; }
+|   "^="                        { $$ = AssignOp::SELFXOR; }
+|   "|="                        { $$ = AssignOp::SELFOR; }
 ;
 
 expression:
     assignment_expression
+        { $$ = $1; }
 |   expression ',' assignment_expression
+        {
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::COMMA;
+            e->left = $1;
+            e->right = $3;
+            $$ = std::move(e);
+        }
 ;
 
 constant_expression:
-    conditional_expression
+    conditional_expression      { $$ = $1; }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -451,65 +795,132 @@ constant_expression:
  * ------------------------------------------------------------------------- */
 
 statement:
-    labeled_statement
-|   expression_statement
-|   compound_statement
-|   selection_statement
-|   iteration_statement
-|   jump_statement
-|   declaration_statement
+    labeled_statement           { $$ = $1; }
+|   expression_statement        { $$ = $1; }
+|   compound_statement          { $$ = $1; }
+|   selection_statement         { $$ = $1; }
+|   iteration_statement         { $$ = $1; }
+|   jump_statement              { $$ = $1; }
+|   declaration_statement       { $$ = $1; }
 ;
 
 labeled_statement:
     CASE constant_expression ':' statement
+        {
+            auto e = MkNode<CaseStatement>();
+            e->constant = $2;
+            e->stmt = $4;
+            $$ = std::move(e);
+        }
 |   DEFAULT ':' statement
+        {
+            auto e = MkNode<DefaultStatement>();
+            e->stmt = $3;
+            $$ = std::move(e);
+        }
 ;
 
 expression_statement:
     expression_opt ';'
+        { $$ = MkNode<ExpressionStatement>(); $$->expr = $1; }
 ;
 
 compound_statement:
-    '{' statement_seq_opt '}'
+    '{' '}'
+        { $$ = MkNode<CompoundStatement>(); }
+|   '{' statement_seq '}'
+        { $$ = $2; }
 ;
 
 statement_seq:
     statement
+        { $$ = MkNode<CompoundStatement>(); $$->stmts.push_back($1); }
 |   statement_seq statement
+        { $$ = $1; $$->stmts.push_back($2); }
 ;
 
 selection_statement:
     IF '(' condition ')' statement else_statement
+        {
+            auto e = MkNode<IfStatement>();
+            e->condition = $3;
+            e->trueStmt = $5;
+            e->falseStmt = $6;
+            $$ = std::move(e);
+        }
 |   SWITCH '(' condition ')' statement
+        {
+            auto e = MkNode<SwitchStatement>();
+            e->condition = $3;
+            e->stmt = $5;
+            $$ = std::move(e);
+        }
 ;
 
-else_statement:
-|   ELSE statement;
+else_statement:                 { $$ = nullptr; }
+|   ELSE statement              { $$ = $2; }
+;
 
 condition:
-    expression
-|   type_specifier_seq declarator '=' assignment_expression
+    expression                  { $$ = $1; }
 ;
     
 iteration_statement:
     WHILE '(' condition ')' statement
+        {
+            auto e = MkNode<WhileStatement>();
+            e->condition = $3;
+            e->stmt = $5;
+            $$ = std::move(e);
+        }
 |   DO statement WHILE '(' expression ')' ';'
+        {
+            auto e = MkNode<DoStatement>();
+            e->condition = $5;
+            e->stmt = $2;
+            $$ = std::move(e);
+        }
 |   FOR '(' for_init_statement condition_opt ';' expression_opt ')' statement
+        {
+            auto e = $3;
+            e->condition = $4;
+            e->iterExpr = $6;
+            e->stmt = $8;
+            $$ = std::move(e);
+        }
 ;
 
 for_init_statement:
     expression_statement
+        {
+            $$ = MkNode<ForStatement>();
+            $$->initType = ForStatement::EXPR;
+            $$->exprInit = $1;
+        }
 |   simple_declaration
+        {
+            $$ = MkNode<ForStatement>();
+            $$->initType = ForStatement::DECL;
+            $$->declInit = $1;
+        }
 ;
 
 jump_statement:
     BREAK ';'
+        { $$ = MkNode<JumpStatement>(); $$->type = JumpStatement::BREAK; }
 |   CONTINUE ';'
+        { $$ = MkNode<JumpStatement>(); $$->type = JumpStatement::CONTINUE; }
 |   RETURN expression_opt ';'
+        {
+            $$ = MkNode<JumpStatement>(); 
+            $$->type = JumpStatement::RETURN; 
+            $$->retExpr = $2;
+        }
 ;
 
 declaration_statement:
     block_declaration
+        { $$ = MkNode<DeclerationStatement>(); $$->decl = $1; }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -517,9 +928,10 @@ declaration_statement:
  * ------------------------------------------------------------------------- */
 
 declaration_seq:
-    declaration_seq             { $$ = $1; }
+    declaration             
+        { $$.push_back($1); }
 |   declaration_seq declaration
-        { $$ = $1; $$->decls.push_back($2); }
+        { $$ = $1; $$.push_back($2); }
 ;
     
 declaration:
@@ -532,7 +944,9 @@ block_declaration:
 ;
 
 simple_declaration:
-    decl_specifier_seq_opt init_declarator_list_opt ';'
+    decl_specifier_seq ';'
+        { $$ = MkNode<BlockDeclaration>(); $$->declSpec = $1; }
+|   decl_specifier_seq init_declarator_list ';'
         { 
             $$ = MkNode<BlockDeclaration>();
             $$->declSpec = $1;
@@ -557,9 +971,9 @@ decl_specifier_seq:
 |   decl_specifier_seq decl_specifier
         { 
             $$ = $1;
-            auto ss = $$->combine($2);
+            auto ss = $$->Combine($2);
             if (ss)
-                throw syntax_error(yylloc, ss.moveMsg());
+                throw syntax_error(@$, ss.moveMsg());
         }
 ;
     
@@ -570,15 +984,31 @@ function_specifier:
 
 type_specifier:
     simple_type_specifier       
-        { $$ = MkNode<SimpleTypeSpecifier>(); $$->fundTypePart = $1; }
+        { 
+            auto e = MkNode<SimpleTypeSpecifier>(); 
+            e->fundTypePart = $1; 
+            $$ = std::move(e);
+        }
 |   class_specifier
-        { $$ = MkNode<ClassTypeSpecifier>(); $$->classType = $1; }
+        { 
+            auto e = MkNode<ClassTypeSpecifier>(); 
+            e->classType = $1; 
+            $$ = std::move(e);
+        }
 |   enum_specifier
-        { $$ = MkNode<EnumTypeSpecifier>(); $$->enumType = $1; }
+        { 
+            auto e = MkNode<EnumTypeSpecifier>(); 
+            e->enumType = $1; 
+            $$ = std::move(e);
+        }
 |   elaborated_type_specifier
         { $$ = $1; }
 |   cv_qualifier
-        { $$ = MkNode<TypeSpecifier>(); $$->cv = $1; }
+        { 
+            auto e = MkNode<TypeSpecifier>(); 
+            e->cv = $1; 
+            $$ = std::move(e);
+        }
 ;
     
 simple_type_specifier:
@@ -658,7 +1088,7 @@ enumerator_definition:
     enumerator
         { $$.first = $1; }
 |   enumerator '=' constant_expression
-        { $$.first = $1; $$.second = $2; }
+        { $$.first = $1; $$.second = $3; }
 ;
     
 enumerator:
@@ -671,93 +1101,214 @@ enumerator:
 
 init_declarator_list:
     init_declarator
-        { return nullptr; /* TODO */ }
+        { $$.push_back($1); }
 |   init_declarator_list ',' init_declarator
-        { return nullptr; /* TODO */ }
+        { $$ = $1; $$.push_back($3); }
 ;
 
 init_declarator:
     declarator initializer_opt
+        {
+            $$ = MkNode<InitDeclarator>();
+            $$->declarator = $1;
+            $$->initializer = $2;
+        }
 ;
     
 declarator:
     direct_declarator
-|   ptr_operator declarator
+        { $$ = $1; }
+|   ptr_operator_list direct_declarator
+        { $$ = $2; $$->ptrSpec = $1; }
 ;
 
 direct_declarator:
     declarator_id
-|   direct_declarator '(' parameter_declaration_list_opt ')' cv_qualifier_opt
-|   direct_declarator '[' constant_expression_opt ']' '(' declarator ')'
+        { $$ = $1; }
+|   direct_declarator '(' parameter_declaration_list ')' cv_qualifier_opt
+        {
+            auto e = MkNode<FunctionDeclarator>();
+            e->retType = $1;
+            e->params = $3;
+            e->isFuncConst = $5;
+            $$ = std::move(e);
+        }
+|   direct_declarator '[' constant_expression ']' 
+        {
+            auto e = MkNode<ArrayDeclarator>();
+            e->elemType = $1;
+            e->size = $3;
+            $$ = std::move(e);
+        }
+|   '(' declarator ')'
+        { 
+            auto e = MkNode<NestedDeclarator>(); 
+            e->decl = $2; 
+            $$ = std::move(e); 
+        }
+;
+
+ptr_operator_list:
+    ptr_operator
+        { $$ = MkNode<PtrSpecifier>(); $$->ptrList.push_back($1); }
+|   ptr_operator ptr_operator_list
+        { $$ = $2; $$->ptrList.push_back($1); }
 ;
 
 ptr_operator:
     '*' cv_qualifier_opt
+        {
+            $$.ptrType = PtrSpecifier::PTR; 
+            $$.isPtrConst = $2;
+        }
 |   '&'
+        { $$.ptrType = PtrSpecifier::REF; }
 |   name_specifier '*' cv_qualifier_opt
+        {
+            $$.ptrType = PtrSpecifier::CLASSPTR; 
+            $$.isPtrConst = $3;
+            $$.classNameSpec = $1;
+        }
 ;
     
 cv_qualifier:
-    CONST
+    CONST                       { $$ = CVQualifier::CONST; }
 ;
 
 declarator_id:
     id_expression
-|   name_specifier_opt type_name
+        { $$ = MkNode<IdDeclarator>(); $$->id = $1; }
 ;
 
 type_id:
     type_specifier_seq abstract_declarator_opt
+        {
+            $$ = MkNode<TypeId>();
+            $$->typeSpec = $1;
+            $$->abstractDecl = $2;
+        }
 ;
 
 type_specifier_seq:
-    type_specifier type_specifier_seq_opt
+    type_specifier
+        { $$ = $1; }
+|   type_specifier_seq type_specifier
+        {
+            $$ = $1;
+            auto ss = $$->Combine($2);
+            if (ss)
+                throw syntax_error(@$, ss.moveMsg());
+        }
 ;
     
 abstract_declarator:
-    ptr_operator abstract_declarator_opt
-|   direct_abstract_declarator
+    direct_abstract_declarator
+        { $$ = $1; }
+|   ptr_operator_list
+        { $$ = MkNode<Declarator>(); $$->ptrSpec = $1; }
+|   ptr_operator_list direct_abstract_declarator
+        { $$ = $2; $$->ptrSpec = $1; }
 ;
 
 direct_abstract_declarator:
-    direct_abstract_declarator_opt '(' parameter_declaration_list_opt ')' cv_qualifier_opt
-|   direct_abstract_declarator_opt '[' constant_expression_opt ']' '(' abstract_declarator ')'
+    direct_abstract_declarator_opt '(' parameter_declaration_list ')' cv_qualifier_opt
+        {
+            auto e = MkNode<FunctionDeclarator>();
+            e->retType = $1;
+            e->params = $3;
+            e->isFuncConst = $5;
+            $$ = std::move(e);
+        }
+|   direct_abstract_declarator_opt '[' constant_expression ']' 
+        {
+            auto e = MkNode<ArrayDeclarator>();
+            e->elemType = $1;
+            e->size = $3;
+            $$ = std::move(e);
+        }
+|   '(' abstract_declarator ')'
+        { 
+            auto e = MkNode<NestedDeclarator>(); 
+            e->decl = $2; 
+            $$ = std::move(e);
+        }
 ;
 
 parameter_declaration_list:
-    parameter_declaration
+        {}
+|   parameter_declaration
+        { $$.push_back($1); }
 |   parameter_declaration_list ',' parameter_declaration
+        { $$ = $1; $$.push_back($3); }
 ;
 
 parameter_declaration:
-    decl_specifier_seq declarator
-|   decl_specifier_seq declarator '=' assignment_expression
-|   decl_specifier_seq abstract_declarator_opt
-|   decl_specifier_seq abstract_declarator_opt '=' assignment_expression
+    decl_specifier_seq declarator assignment_expression_opt
+        {
+            $$ = MkNode<ParameterDeclaration>();
+            $$->declSpec = $1;
+            $$->decl = $2;
+            $$->defaultExpr = $3;
+        }
+|   decl_specifier_seq abstract_declarator_opt assignment_expression_opt
+        {
+            $$ = MkNode<ParameterDeclaration>();
+            $$->declSpec = $1;
+            $$->decl = $2;
+            $$->defaultExpr = $3;
+        }
 ;
     
 function_definition:
-    decl_specifier_seq_opt declarator ctor_initializer_opt function_body
+    decl_specifier_seq_opt declarator function_body
+        {
+            $$ = MkNode<FunctionDefinition>();
+            $$->declSpec = $1;
+            $$->declarator = $2;
+            $$->funcBody = $3;
+        }
+|   decl_specifier_seq_opt declarator ctor_initializer function_body
+        {
+            $$ = MkNode<FunctionDefinition>();
+            $$->declSpec = $1;
+            $$->declarator = $2;
+            $$->ctorInitList = $3;
+            $$->funcBody = $4;
+        }
 ;
 
 function_body:
-    compound_statement
+    compound_statement          { $$ = $1; }
 ;
 
 initializer:
-    '=' initializer_clause
-|   '(' expression_list ')'
+    '=' initializer_clause      { $$ = $2; }
+|   '(' expression_list ')'     
+        { 
+            auto e = MkNode<ParenthesisInitializer>(); 
+            e->exprList = $2; 
+            $$ = std::move(e);
+        }
 ;
 
 initializer_clause:
     assignment_expression
+        { 
+            auto e = MkNode<AssignmentInitializer>(); 
+            e->expr = $1; 
+            $$ = std::move(e);
+        }
 |   '{' initializer_list COMMA_opt '}'
+        { $$ = $2; }
 |   '{' '}'
+        { $$ = MkNode<ListInitializer>(); }
 ;
 
 initializer_list:
     initializer_clause
+        { $$ = MkNode<ListInitializer>(); $$->initList.push_back($1); }
 |   initializer_list ',' initializer_clause
+        { $$ = $1; $$->initList.push_back($3); }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -765,38 +1316,81 @@ initializer_list:
  * ------------------------------------------------------------------------- */
 
 class_specifier:
-    class_head '{' member_specification_opt '}'
+    class_head '{' member_specification '}'
+        { 
+            $$ = $1; 
+            $$->members = $3;
+            $$->MoveDefaultMember();
+        }
 ;
 
 class_head:
-    class_key identifier_opt base_clause_opt
-|   class_key nested_name_specifier identifier base_clause_opt
+    class_key base_clause_opt
+        {
+            $$ = MkNode<ClassSpecifier>();
+            $$->key = $1;
+            $$->baseSpec = $2;
+        }
+|   class_key name_specifier_opt identifier base_clause_opt
+        {
+            $$ = MkNode<ClassSpecifier>();
+            $$->key = $1;
+            $$->nameSpec = $2;
+            $$->identifier = $3;
+            $$->baseSpec = $4;
+        }
 ;
 
 class_key:
-    CLASS
-|   STRUCT
+    CLASS                       { $$ = ClassSpecifier::CLASS; }
+|   STRUCT                      { $$ = ClassSpecifier::STRUCT; }
 ;
     
 member_specification:
-    member_declaration member_specification_opt
-|   access_specifier ':' member_specification_opt
+        { $$ = MkNode<MemberList>(); }
+|   member_declaration member_specification
+        { $$ = $2; $$->defaultMember.push_back($1); }
+|   access_specifier ':' member_specification
+        { $$ = $3; $$->MoveDefaultTo($1); }
 ;
 
 member_declaration:
-    decl_specifier_seq_opt member_declarator_list_opt ';'
+    decl_specifier_seq member_declarator_list ';'
+        {
+            auto e = MkNode<MemberVariable>();
+            e->declSpec = $1;
+            e->decls = $2;
+            $$ = std::move(e);
+        }
 |   function_definition COMMA_opt
-|   name_specifier unqualified_id ';'
+        { 
+            auto e = MkNode<MemberFunction>(); 
+            e->func = $1; 
+            $$ = std::move(e);
+        }
 ;
 
 member_declarator_list:
-    member_declarator
+        {}
+|   member_declarator
+        { $$.push_back($1); }
 |   member_declarator_list ',' member_declarator
+        { $$ = $1; $$.push_back($3); }
 ;
 
 member_declarator:
     declarator pure_specifier_opt
+        {
+            $$ = MkNode<MemberDeclarator>();
+            $$->decl = $1;
+            $$->isPure = $2;
+        }
 |   declarator constant_initializer
+        {
+            $$ = MkNode<MemberDeclarator>();
+            $$->decl = $1;
+            $$->constInit = $2;
+        }
 ;
     
 pure_specifier:
@@ -804,7 +1398,7 @@ pure_specifier:
 ;
 
 constant_initializer:
-    '=' constant_expression
+    '=' constant_expression     { $$ = $2; }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -812,18 +1406,30 @@ constant_initializer:
  * ------------------------------------------------------------------------- */
 
 base_clause:
-    ':' base_specifier
+    ':' base_specifier          { $$ = $2; }
 ;
 
 base_specifier:
     name_specifier_opt class_name
+        {
+            $$ = MkNode<BaseSpecifier>();
+            $$->access = Access::DEFAULT;
+            $$->nameSpec = $1;
+            $$->className = $2;
+        }
 |   access_specifier name_specifier_opt class_name
+        {
+            $$ = MkNode<BaseSpecifier>();
+            $$->access = $1;
+            $$->nameSpec = $2;
+            $$->className = $3;
+        }
 ;
 
 access_specifier:
-    PRIVATE
-|   PROTECTED
-|   PUBLIC
+    PRIVATE                     { $$ = Access::PRIVATE; }
+|   PROTECTED                   { $$ = Access::PROTECTED; }
+|   PUBLIC                      { $$ = Access::PUBLIC; }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -831,33 +1437,52 @@ access_specifier:
  * ------------------------------------------------------------------------- */
 
 conversion_function_id:
-    operator conversion_type_id { $$ = $1; }
+    OPERATOR conversion_type_id { $$ = $2; }
 ;
 
 conversion_type_id:
     type_specifier_seq conversion_declarator_opt
+        {
+            $$ = MkNode<ConversionFunctionId>();
+            $$->typeSpec = $1;
+            $$->ptrSpec = $2;
+        }
 ;
 
 conversion_declarator:
-    ptr_operator conversion_declarator_opt
+    ptr_operator_list           { $$ = $1; }
 ;
 
 ctor_initializer:
-    ':' mem_initializer_list
+    ':' mem_initializer_list    { $$ = $2; }
 ;
 
 mem_initializer_list:
     mem_initializer
-|   mem_initializer ',' mem_initializer_list
+        { $$.push_back($1); }
+|   mem_initializer_list ',' mem_initializer
+        { $$ = $1; $$.push_back($3); }
 ;
 
 mem_initializer:
     mem_initializer_id '(' expression_list_opt ')'
+        { $$ = $1; $$->exprList = $3; }
 ;
 
 mem_initializer_id:
     name_specifier_opt class_name
+        {
+            $$ = MkNode<CtorMemberInitializer>();
+            $$->nameSpec = $1;
+            $$->identifier = $2;
+            $$->isBaseCtor = true;
+        }
 |   identifier
+        {
+            $$ = MkNode<CtorMemberInitializer>();
+            $$->identifier = $1;
+            $$->isBaseCtor = false;
+        }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -870,66 +1495,78 @@ operator_function_id:
 ;
 
 operator:
-    '+'                         { $$ = OverloadOperator::ADD; }
-|   '-'                         { $$ = OverloadOperator::SUB; }
-|   '*'                         { $$ = OverloadOperator::MUL; }
-|   '/'                         { $$ = OverloadOperator::DIV; }
-|   '%'                         { $$ = OverloadOperator::MOD; }
-|   '^'                         { $$ = OverloadOperator::XOR; }
-|   '&'                         { $$ = OverloadOperator::AND; }
-|   '|'                         { $$ = OverloadOperator::OR; }
-|   '~'                         { $$ = OverloadOperator::NOT; }
-|   '!'                         { $$ = OverloadOperator::LOGINOT; }
-|   '='                         { $$ = OverloadOperator::ASSIGN; }
-|   '<'                         { $$ = OverloadOperator::LT; }
-|   '>'                         { $$ = OverloadOperator::GT; }
-|   "+="                        { $$ = OverloadOperator::SELFADD; }
-|   "-="                        { $$ = OverloadOperator::SELFSUB; }
-|   "*="                        { $$ = OverloadOperator::SELFMUL; }
-|   "/="                        { $$ = OverloadOperator::SELFDIV; }
-|   "%="                        { $$ = OverloadOperator::SELFMOD; }
-|   "~="                        { $$ = OverloadOperator::SELFXOR; }
-|   "&="                        { $$ = OverloadOperator::SELFAND; }
-|   "|="                        { $$ = OverloadOperator::SELFOR; }
-|   "<<"                        { $$ = OverloadOperator::SHL; }
-|   ">>"                        { $$ = OverloadOperator::SHR; }
-|   "<<="                       { $$ = OverloadOperator::SELFSHL; }
-|   ">>="                       { $$ = OverloadOperator::SELFSHR; }
-|   "=="                        { $$ = OverloadOperator::EQ; }
-|   "!="                        { $$ = OverloadOperator::NE; }
-|   "<="                        { $$ = OverloadOperator::LE; }
-|   ">="                        { $$ = OverloadOperator::GE; }
-|   "&&"                        { $$ = OverloadOperator::LOGIAND; }
-|   "||"                        { $$ = OverloadOperator::LOGIOR; }
-|   "++"                        { $$ = OverloadOperator::SELFINC; }
-|   "--"                        { $$ = OverloadOperator::SELFDEC; }
-|   ','                         { $$ = OverloadOperator::COMMA; }
-|   "->*"                       { $$ = OverloadOperator::ARROWSTAR; }
-|   "->"                        { $$ = OverloadOperator::ARROW; }
-|   "()"                        { $$ = OverloadOperator::CALL; }
-|   "[]"                        { $$ = OverloadOperator::SUBSCRIPT; }
+    '+'                         { $$ = Operator::ADD; }
+|   '-'                         { $$ = Operator::SUB; }
+|   '*'                         { $$ = Operator::MUL; }
+|   '/'                         { $$ = Operator::DIV; }
+|   '%'                         { $$ = Operator::MOD; }
+|   '^'                         { $$ = Operator::XOR; }
+|   '&'                         { $$ = Operator::AND; }
+|   '|'                         { $$ = Operator::OR; }
+|   '~'                         { $$ = Operator::NOT; }
+|   '!'                         { $$ = Operator::LOGINOT; }
+|   '='                         { $$ = Operator::ASSIGN; }
+|   '<'                         { $$ = Operator::LT; }
+|   '>'                         { $$ = Operator::GT; }
+|   "+="                        { $$ = Operator::SELFADD; }
+|   "-="                        { $$ = Operator::SELFSUB; }
+|   "*="                        { $$ = Operator::SELFMUL; }
+|   "/="                        { $$ = Operator::SELFDIV; }
+|   "%="                        { $$ = Operator::SELFMOD; }
+|   "^="                        { $$ = Operator::SELFXOR; }
+|   "&="                        { $$ = Operator::SELFAND; }
+|   "|="                        { $$ = Operator::SELFOR; }
+|   "<<"                        { $$ = Operator::SHL; }
+|   ">>"                        { $$ = Operator::SHR; }
+|   "<<="                       { $$ = Operator::SELFSHL; }
+|   ">>="                       { $$ = Operator::SELFSHR; }
+|   "=="                        { $$ = Operator::EQ; }
+|   "!="                        { $$ = Operator::NE; }
+|   "<="                        { $$ = Operator::LE; }
+|   ">="                        { $$ = Operator::GE; }
+|   "&&"                        { $$ = Operator::LOGIAND; }
+|   "||"                        { $$ = Operator::LOGIOR; }
+|   "++"                        { $$ = Operator::SELFINC; }
+|   "--"                        { $$ = Operator::SELFDEC; }
+|   ','                         { $$ = Operator::COMMA; }
+|   "->*"                       { $$ = Operator::ARROWSTAR; }
+|   "->"                        { $$ = Operator::ARROW; }
+|   "()"                        { $$ = Operator::CALL; }
+|   "[]"                        { $$ = Operator::SUBSCRIPT; }
 ;
 
 /* ------------------------------------------------------------------------- *
  * A. Optional epsilon definition
  * ------------------------------------------------------------------------- */
 
-COLONCOLON_opt: | "::" ;
+COLONCOLON_opt:                 { $$ = false; }
+|   "::"                        { $$ = true; }
+;
+
 COMMA_opt: | ',';
 
-expression_list_opt: | expression_list ;
-name_specifier_opt: | name_specifier;
-type_name_COLONCOLON_opt: | type_name "::";
-new_placememt_opt: | new_placememt;
-new_initializer_opt: | new_initializer;
-new_declarator_opt: | new_declarator;
+expression_list_opt:            { $$ = nullptr; }
+|   expression_list             { $$ = $1; }
+;
+
+name_specifier_opt:             { $$ = nullptr; }
+|   name_specifier              { $$ = $1; }
+;
+
+type_name_COLONCOLON_opt:       { $$ = nullptr; }
+| type_name "::"                { $$ = $1; }
+;
+
+new_placememt_opt:              { $$ = nullptr; }
+|   new_placememt               { $$ = $1; }
+;
+
+new_initializer_opt:            { $$ = nullptr; }
+|   new_initializer             { $$ = $1; }
+;
 
 expression_opt:                 { $$ = nullptr; }
 |   expression                  { $$ = $1; }
-;
-
-statement_seq_opt:              { $$ = nullptr; }
-|   statement_seq               { $$ = $1; }
 ;
 
 condition_opt:                  { $$ = nullptr; }
@@ -940,24 +1577,41 @@ decl_specifier_seq_opt:         { $$ = nullptr; }
 |   decl_specifier_seq          { $$ = $1; }
 ;
 
-init_declarator_list_opt:       { $$ = nullptr; }
-|   init_declarator_list        { $$ = $1; }
+identifier_opt:                 { $$ = ""; }
+|   identifier                  { $$ = $1; }
 ;
 
-identifier_opt: | identifier;
-initializer_opt: | initializer;
-parameter_declaration_list_opt: | parameter_declaration_list;
-cv_qualifier_opt: | cv_qualifier;
-constant_expression_opt: | constant_expression;
-abstract_declarator_opt: | abstract_declarator;
-type_specifier_seq_opt: | type_specifier_seq;
-direct_abstract_declarator_opt: | direct_abstract_declarator;
-ctor_initializer_opt: | ctor_initializer;
-member_specification_opt: | member_specification;
-base_clause_opt: | base_clause;
-member_declarator_list_opt: | member_declarator_list;
-pure_specifier_opt: | pure_specifier;
-conversion_declarator_opt: | conversion_declarator;
+initializer_opt:                { $$ = nullptr; }
+|   initializer                 { $$ = $1; }
+;
+
+cv_qualifier_opt:               { $$ = false; }
+|   cv_qualifier                { $$ = true; }
+;
+
+abstract_declarator_opt:        { $$ = nullptr; }
+|   abstract_declarator         { $$ = $1; }
+;
+
+direct_abstract_declarator_opt: { $$ = nullptr; }
+|   direct_abstract_declarator  { $$ = $1; }
+;
+
+assignment_expression_opt:      { $$ = nullptr; }
+|   '=' assignment_expression   { $$ = $2; }
+;
+
+base_clause_opt:                { $$ = nullptr; }
+|   base_clause                 { $$ = $1; }
+;
+
+pure_specifier_opt:             { $$ = false; }
+|   pure_specifier              { $$ = true; }
+;
+
+conversion_declarator_opt:      { $$ = nullptr; }
+|   conversion_declarator       { $$ = $1; }
+;
 
 
 %%
