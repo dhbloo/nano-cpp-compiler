@@ -101,6 +101,7 @@ boolean_literal         "false"|"true"
 "int"                   { return yy::parser::token::INT; }
 "long"                  { return yy::parser::token::LONG; }
 "new"                   { return yy::parser::token::NEW; }
+"operator"              { return yy::parser::token::OPERATOR; }
 "private"               { return yy::parser::token::PRIVATE; }
 "protected"             { return yy::parser::token::PROTECTED; }
 "public"                { return yy::parser::token::PUBLIC; }

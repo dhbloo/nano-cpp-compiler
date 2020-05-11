@@ -138,7 +138,7 @@ struct Indent
     friend inline std::ostream &operator<<(std::ostream &os, Indent ind)
     {
         for (int i = 0; i < ind.level; i++)
-            os << "    ";
+            os << "  ";
         return os;
     }
 
@@ -149,7 +149,11 @@ private:
 struct SyntaxStatus
 {
     SyntaxStatus() : error(false) {}
-    SyntaxStatus(std::string msg) : error(true), msg(std::move(msg)) {}
+    template <typename T>
+    SyntaxStatus(T msg) : error(true)
+                        , msg(std::move(msg))
+    {}
+    // SyntaxStatus(std::string msg) : error(true), msg(std::move(msg)) {}
 
                 operator bool() const { return error; }
     std::string moveMsg() { return std::move(msg); }
@@ -161,7 +165,7 @@ private:
 
 struct Node
 {
-    virtual void Print(std::ostream &os, Indent indent) const /* = 0*/;
+    virtual void Print(std::ostream &os, Indent indent) const /* = 0*/ {}
 };
 
 /* ------------------------------------------------------------------------- *
@@ -200,11 +204,15 @@ struct AssignmentExpression : Expression
     Ptr<Expression> left, right;
 
     ValType ValueType() const override { return LVALUE; }
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct ConditionalExpression : Expression
 {
     Ptr<Expression> condition, trueExpr, falseExpr;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct BinaryExpression : Expression
@@ -235,11 +243,15 @@ struct CallExpression : Expression
 {
     Ptr<Expression>     funcExpr;
     Ptr<ExpressionList> params;  // opt
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct SizeofExpression : Expression
 {
     Ptr<TypeId> typeId;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct NewExpression : Expression
@@ -252,6 +264,8 @@ struct NewExpression : Expression
 struct PlainNew : NewExpression
 {
     Ptr<TypeId> typeId;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct InitializableNew : NewExpression
@@ -260,6 +274,8 @@ struct InitializableNew : NewExpression
     Ptr<PtrSpecifier>   ptrSpec;  // opt
     PtrVec<Expression>  arraySizes;
     Ptr<ExpressionList> initializer;  // opt
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct DeleteExpression : Expression
@@ -275,16 +291,22 @@ struct IdExpression : Expression
     Ptr<NameSpecifier> nameSpec;  // opt
     std::string        identifier;
     bool               isDestructor;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct DestructorExpression : Expression
 {
     Ptr<NameSpecifier>           nameSpec;  // opt
     Ptr<ElaboratedTypeSpecifier> typeName;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct ThisExpression : Expression
-{};
+{
+    void Print(std::ostream &os, Indent indent) const override;
+};
 
 struct LiteralExpression : Expression
 {
@@ -329,6 +351,8 @@ struct BoolLiteral : LiteralExpression
 struct ExpressionList : Node
 {
     PtrVec<Expression> exprList;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -342,45 +366,62 @@ struct CaseStatement : Statement
 {
     Ptr<Expression> constant;
     Ptr<Statement>  stmt;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct DefaultStatement : Statement
 {
     Ptr<Statement> stmt;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct ExpressionStatement : Statement
 {
     Ptr<Expression> expr;  // opt
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct CompoundStatement : Statement
 {
     PtrVec<Statement> stmts;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct IfStatement : Statement
 {
     Ptr<Expression> condition;
-    Ptr<Statement>  trueStmt, falseStmt;
+    Ptr<Statement>  trueStmt;
+    Ptr<Statement>  falseStmt;  // opt
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct SwitchStatement : Statement
 {
     Ptr<Expression> condition;
     Ptr<Statement>  stmt;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct WhileStatement : Statement
 {
     Ptr<Expression> condition;
     Ptr<Statement>  stmt;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct DoStatement : Statement
 {
     Ptr<Expression> condition;
     Ptr<Statement>  stmt;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct ForStatement : Statement
@@ -395,6 +436,8 @@ struct ForStatement : Statement
     Ptr<Expression> condition;  // opt
     Ptr<Expression> iterExpr;   // opt
     Ptr<Statement>  stmt;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct JumpStatement : Statement
@@ -403,11 +446,15 @@ struct JumpStatement : Statement
 
     JType           type;
     Ptr<Expression> retExpr;  // opt
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct DeclerationStatement : Statement
 {
     Ptr<BlockDeclaration> decl;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -421,6 +468,8 @@ struct BlockDeclaration : Declaration
 {
     Ptr<DeclSpecifier>     declSpec;
     PtrVec<InitDeclarator> initDeclList;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct DeclSpecifier : Node
@@ -429,6 +478,7 @@ struct DeclSpecifier : Node
     Ptr<TypeSpecifier> typeSpec;
 
     SyntaxStatus Combine(Ptr<DeclSpecifier> other);
+    void         Print(std::ostream &os, Indent indent) const override;
 };
 
 struct TypeSpecifier : Node
@@ -436,11 +486,15 @@ struct TypeSpecifier : Node
     CVQualifier cv;
 
     SyntaxStatus Combine(Ptr<TypeSpecifier> other);
+    void         Print(std::ostream &os, Indent indent) const override;
 };
 
 struct SimpleTypeSpecifier : TypeSpecifier
 {
     FundTypePart fundTypePart;
+
+    SyntaxStatus Combine(SimpleTypeSpecifier *other);
+    void         Print(std::ostream &os, Indent indent) const override;
 };
 
 struct ElaboratedTypeSpecifier : TypeSpecifier
@@ -451,16 +505,21 @@ struct ElaboratedTypeSpecifier : TypeSpecifier
     std::string        typeName;
 
     bool operator==(const ElaboratedTypeSpecifier &other);
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct ClassTypeSpecifier : TypeSpecifier
 {
     Ptr<ClassSpecifier> classType;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct EnumTypeSpecifier : TypeSpecifier
 {
     Ptr<EnumSpecifier> enumType;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct EnumSpecifier : Node
@@ -469,6 +528,8 @@ struct EnumSpecifier : Node
 
     std::string             identifier;  // opt
     std::vector<Enumerator> enumList;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -493,11 +554,15 @@ struct PtrSpecifier : Node
     };
 
     std::vector<PtrOp> ptrList;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct Declarator : Node
 {
     Ptr<PtrSpecifier> ptrSpec;  // opt
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct FunctionDeclarator : Declarator
@@ -505,28 +570,38 @@ struct FunctionDeclarator : Declarator
     Ptr<Declarator>              retType;  // opt when abstract
     PtrVec<ParameterDeclaration> params;
     bool                         isFuncConst;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct ArrayDeclarator : Declarator
 {
     Ptr<Declarator> elemType;  // opt when abstract
     Ptr<Expression> size;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct IdDeclarator : Declarator
 {
     Ptr<IdExpression> id;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct NestedDeclarator : Declarator
 {
     Ptr<Declarator> decl;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct TypeId : Node
 {
     Ptr<TypeSpecifier> typeSpec;
     Ptr<Declarator>    abstractDecl;  // opt
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct ParameterDeclaration : Node
@@ -534,6 +609,8 @@ struct ParameterDeclaration : Node
     Ptr<DeclSpecifier> declSpec;
     Ptr<Declarator>    decl;         // opt when abstract
     Ptr<Expression>    defaultExpr;  // opt
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct FunctionDefinition : Declaration
@@ -542,6 +619,8 @@ struct FunctionDefinition : Declaration
     Ptr<Declarator>               declarator;
     PtrVec<CtorMemberInitializer> ctorInitList;  // opt
     Ptr<CompoundStatement>        funcBody;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct Initializer : Node
@@ -553,16 +632,22 @@ struct ClauseInitializer : Initializer
 struct AssignmentInitializer : ClauseInitializer
 {
     Ptr<Expression> expr;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct ListInitializer : ClauseInitializer
 {
     PtrVec<ClauseInitializer> initList;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct ParenthesisInitializer : Initializer
 {
     Ptr<ExpressionList> exprList;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -581,6 +666,7 @@ struct ClassSpecifier : Node
     Ptr<MemberList> members;
 
     void MoveDefaultMember();
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct MemberList : Node
@@ -588,6 +674,7 @@ struct MemberList : Node
     PtrVec<MemberDeclaration> publicMember, protectedMember, privateMember, defaultMember;
 
     void MoveDefaultTo(Access access);
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct MemberDeclaration : Node
@@ -597,18 +684,22 @@ struct MemberVariable : MemberDeclaration
 {
     Ptr<DeclSpecifier>       declSpec;
     PtrVec<MemberDeclarator> decls;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct MemberDeclarator : Node
 {
     Ptr<Declarator> decl;
-    Ptr<Expression> constInit;
+    Ptr<Expression> constInit;  // opt
     bool            isPure;
 };
 
 struct MemberFunction : MemberDeclaration
 {
     Ptr<FunctionDefinition> func;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -620,6 +711,8 @@ struct BaseSpecifier : Node
     Access             access;
     Ptr<NameSpecifier> nameSpec;  // opt
     std::string        className;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -630,6 +723,8 @@ struct ConversionFunctionId : IdExpression
 {
     Ptr<TypeSpecifier> typeSpec;
     Ptr<PtrSpecifier>  ptrSpec;  // opt
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct CtorMemberInitializer : Node
@@ -638,6 +733,8 @@ struct CtorMemberInitializer : Node
     std::string         identifier;
     Ptr<ExpressionList> exprList;  // opt
     bool                isBaseCtor;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -648,6 +745,8 @@ struct OperatorFunctionId : IdExpression
 {
     Operator overloadOp;
     bool     isGlobal;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 }  // namespace ast

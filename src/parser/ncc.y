@@ -80,6 +80,8 @@
 %token STATIC       STRUCT          SWITCH          THIS            
 %token TYPEDEF      UNSIGNED        VIRTUAL         VOID            WHILE
 
+%token DD  EE  FF
+
 /* Operator associativity */
 %left "::" '.' "->" ".*" "->*" '*' '/' '%' '+' '-' "<<" ">>" 
 %left '<' '>' "<=" ">=" "==" "!=" '&' '^' '|' "&&" "||" ','
@@ -122,7 +124,7 @@
 %type<ast::PtrVec<ast::Declaration>> declaration_seq
 %type<ast::Ptr<ast::Declaration>> declaration
 %type<ast::Ptr<ast::BlockDeclaration>> block_declaration simple_declaration
-%type<ast::Ptr<ast::DeclSpecifier>> decl_specifier_seq decl_specifier_seq_opt decl_specifier function_specifier
+%type<ast::Ptr<ast::DeclSpecifier>> decl_specifier_seq decl_specifier function_specifier
 %type<ast::Ptr<ast::TypeSpecifier>> type_specifier type_specifier_seq
 %type<ast::Ptr<ast::ElaboratedTypeSpecifier>> elaborated_type_specifier type_name type_name_COLONCOLON_opt
 %type<ast::Ptr<ast::EnumSpecifier>> enum_specifier enumerator_list
@@ -214,15 +216,15 @@ boolean_literal:
  * ------------------------------------------------------------------------- */
 
 typedef_name:
-    TYPEDEF identifier          { $$ = $2; }
+    DD TYPEDEF identifier          { $$ = $3; }
 ;
 
 class_name:
-    CLASS identifier            { $$ = $2; }
+    EE CLASS identifier            { $$ = $3; }
 ;
 
 enum_name:
-    ENUM identifier             { $$ = $2; }
+    FF ENUM identifier             { $$ = $3; }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -283,8 +285,8 @@ qualified_id:
 name_specifier:
     "::"
         { $$ = MkNode<NameSpecifier>(); $$->isGlobal = true; }
-|   COLONCOLON_opt nested_name_specifier
-        { $$ = $2; $$->isGlobal = $1; }
+|   COLONCOLON nested_name_specifier
+        { $$ = $2; $$->isGlobal = true; }
 ;
 
 nested_name_specifier:
@@ -1021,7 +1023,7 @@ simple_type_specifier:
 |   UNSIGNED                    { $$ = FundTypePart::UNSIGNED; }
 |   FLOAT                       { $$ = FundTypePart::FLOAT; }
 |   DOUBLE                      { $$ = FundTypePart::DOUBLE; }
-|   VOID                        { $$ = FundTypePart::CHAR; }
+|   VOID                        { $$ = FundTypePart::VOID; }
 ;
     
 type_name:
@@ -1048,14 +1050,14 @@ type_name:
 elaborated_type_specifier:
     name_specifier_opt type_name
         { $$ = $2; $$->nameSpec = $1; }
-|   class_key name_specifier_opt identifier
+|   class_key name_specifier_opt class_name
         { 
             $$ = MkNode<ElaboratedTypeSpecifier>();  
             $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
             $$->typeName = $3;
             $$->nameSpec = $2;
         }
-|   ENUM name_specifier_opt identifier
+|   ENUM name_specifier_opt enum_name
         { 
             $$ = MkNode<ElaboratedTypeSpecifier>();  
             $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
@@ -1260,20 +1262,25 @@ parameter_declaration:
 ;
     
 function_definition:
-    decl_specifier_seq_opt declarator function_body
+    declarator function_body
+        {
+            $$ = MkNode<FunctionDefinition>();
+            $$->declarator = $1;
+            $$->funcBody = $2;
+        }
+|   declarator ctor_initializer function_body
+        {
+            $$ = MkNode<FunctionDefinition>();
+            $$->declarator = $1;
+            $$->ctorInitList = $2;
+            $$->funcBody = $3;
+        }
+|   decl_specifier_seq declarator function_body
         {
             $$ = MkNode<FunctionDefinition>();
             $$->declSpec = $1;
             $$->declarator = $2;
             $$->funcBody = $3;
-        }
-|   decl_specifier_seq_opt declarator ctor_initializer function_body
-        {
-            $$ = MkNode<FunctionDefinition>();
-            $$->declSpec = $1;
-            $$->declarator = $2;
-            $$->ctorInitList = $3;
-            $$->funcBody = $4;
         }
 ;
 
@@ -1320,7 +1327,6 @@ class_specifier:
         { 
             $$ = $1; 
             $$->members = $3;
-            $$->MoveDefaultMember();
         }
 ;
 
@@ -1571,10 +1577,6 @@ expression_opt:                 { $$ = nullptr; }
 
 condition_opt:                  { $$ = nullptr; }
 |   condition                   { $$ = $1; }
-;
-
-decl_specifier_seq_opt:         { $$ = nullptr; }
-|   decl_specifier_seq          { $$ = $1; }
 ;
 
 identifier_opt:                 { $$ = ""; }
