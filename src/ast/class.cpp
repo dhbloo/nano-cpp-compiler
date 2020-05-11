@@ -13,9 +13,9 @@ void MemberList::MoveDefaultTo(Access access)
     PtrVec<MemberDeclaration> *dst;
 
     switch (access) {
-    case Access::PRIVATE: dst = &privateMember;
-    case Access::PROTECTED: dst = &protectedMember;
-    case Access::PUBLIC: dst = &publicMember;
+    case Access::PRIVATE: dst = &privateMember; break;
+    case Access::PROTECTED: dst = &protectedMember; break;
+    case Access::PUBLIC: dst = &publicMember; break;
     default: return;
     }
 
@@ -89,9 +89,9 @@ void BaseSpecifier::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "基类描述: " << className << ' ';
     switch (access) {
-    case Access::PRIVATE: os << "(私有继承)";
-    case Access::PROTECTED: os << "(保护继承)";
-    case Access::PUBLIC: os << "(公有继承)";
+    case Access::PRIVATE: os << "(私有继承)"; break;
+    case Access::PROTECTED: os << "(保护继承)"; break;
+    case Access::PUBLIC: os << "(公有继承)"; break;
     default: os << "(默认继承)";
     }
     os << '\n';

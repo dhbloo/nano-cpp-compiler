@@ -5,6 +5,7 @@
 #include <string>
 #include <cstdlib>
 #include "../parser/yyparser.h"
+#include "../parser/context.h"
 
 static int yycolumn;
 
@@ -18,6 +19,8 @@ static int yycolumn;
 static bool lookup_escape_char(char& c);
 static char convert_escape_char(const char* text);
 static std::string convert_escape_string(const char* text);
+
+#define YY_DECL int yylex(YYSTYPE * yylval_param, YYLTYPE * yylloc_param, const ParseContext& pc)
 
 %}
 
@@ -59,6 +62,8 @@ boolean_literal         "false"|"true"
 <INITIAL>"//"           { BEGIN(LINE_COMMENT); }
 <LINE_COMMENT>\n        { BEGIN(INITIAL); }
 <LINE_COMMENT>.         { }
+
+\#.*\n                  { throw yy::parser::syntax_error(*yylloc, "preprocessing unsupported: " + std::string(yytext, yyleng)); }
 
 {decimal_literal}       { char* p_end;
                           yylval->emplace<std::intmax_t>(std::strtoll(yytext, &p_end, 10)); 
@@ -169,7 +174,17 @@ boolean_literal         "false"|"true"
 "->"                    { return yy::parser::token::ARROW; }
 
 {identifier}            { yylval->emplace<std::string>(yytext);
-                          return yy::parser::token::IDENTIFIER; }
+                          switch (pc.QueryName(yytext)) {
+                            case ParseContext::CLASS:
+                                return yy::parser::token::CLASSNAME;
+                            case ParseContext::ENUM:
+                                return yy::parser::token::ENUMNAME;
+                            case ParseContext::TYPEDEF:
+                                return yy::parser::token::TYPEDEFNAME;
+                            default:
+                                return yy::parser::token::IDENTIFIER;
+                          }
+                        }
 
 {ws}+                   { /* Throw away whitespace */ }
 \n+                     { yycolumn = 1; yylloc->initialize(nullptr, yylineno, yycolumn); }

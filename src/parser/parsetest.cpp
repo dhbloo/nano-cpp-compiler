@@ -13,7 +13,7 @@ int main(int argc, char *argv[])
 
     for (;;) {
         ast::Ptr<ast::TranslationUnit> root;
-        yy::parser parser(root);
+        yy::parser parser(root, {});
         parser.set_debug_level(debug);
 
         if (parser() != 0) {

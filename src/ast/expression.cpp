@@ -80,8 +80,10 @@ void CallExpression::Print(std::ostream &os, Indent indent) const
     os << indent << "函数调用表达式:\n";
     os << indent + 1 << "函数:\n";
     funcExpr->Print(os, indent + 2);
-    os << indent + 1 << "调用参数:\n";
-    params->Print(os, indent + 2);
+    if (params) {
+        os << indent + 1 << "调用参数:\n";
+        params->Print(os, indent + 2);
+    }
 }
 
 void SizeofExpression::Print(std::ostream &os, Indent indent) const

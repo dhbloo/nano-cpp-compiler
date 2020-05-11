@@ -4,13 +4,12 @@ namespace ast {
 
 void TranslationUnit::Print(std::ostream &os, Indent indent) const
 {
-    os << indent
-       << "---------- 翻译单元起始 -------------------------------------------------\n";
-    for (const auto &decl : decls) {
-        decl->Print(os, indent);
+    os << indent << "---------- 翻译单元起始 -------------------------------------------------\n";
+    for (std::size_t i = 0; i < decls.size(); i++) {
+        os << indent << "全局声明[" << i << "]:\n";
+        decls[i]->Print(os, indent + 1);
     }
-    os << indent
-       << "---------- 翻译单元结束 -------------------------------------------------\n";
+    os << indent << "---------- 翻译单元结束 -------------------------------------------------\n";
 }
 
 void NameSpecifier::Print(std::ostream &os, Indent indent) const

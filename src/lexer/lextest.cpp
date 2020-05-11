@@ -51,10 +51,11 @@ std::string EnumName(int t)
 
 int main(int argc, char *argv[])
 {
-    int         token;
-    YYSTYPE     value;
-    YYLTYPE     location;
-    std::size_t index = 1;
+    int          token;
+    YYSTYPE      value;
+    YYLTYPE      location;
+    std::size_t  index = 1;
+    ParseContext pc;
 
     std::cout << std::string(80, '-') << '\n';
     std::cout << "Index\t | Token Type\t\t | Semantic Value\t\t\n";
@@ -62,7 +63,7 @@ int main(int argc, char *argv[])
 
     do {
         try {
-            token = yylex(&value, &location);
+            token = yylex(&value, &location, pc);
         }
         catch (yy::parser::syntax_error e) {
             std::cerr << "error at: " << location << "\n\t" << e.what() << '\n';
@@ -74,5 +75,5 @@ int main(int argc, char *argv[])
             std::cout << SemanticValueToString(token, value);
         std::cout << '\n';
 
-    } while (token != yy::parser::token::ENDOFFILE);
+    } while (token != 0);
 }

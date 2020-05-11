@@ -2,6 +2,7 @@
 
 %code requires {
     #include "../ast/node.h"
+    #include "context.h"
 }
 
 %code {
@@ -16,7 +17,7 @@
     typedef yy::parser::semantic_type YYSTYPE;
     typedef yy::parser::location_type YYLTYPE;
 
-    extern int yylex(YYSTYPE * yylval_param, YYLTYPE * yylloc_param);
+    extern int yylex(YYSTYPE * yylval_param, YYLTYPE * yylloc_param, const ParseContext& pc);
 }
 
 /* bison declarations */
@@ -32,10 +33,11 @@
 %define parse.error verbose
 
 %parse-param { ast::Ptr<ast::TranslationUnit>& astRoot }
+%param { ParseContext pc }
 
 
 /* Identifier */
-%token <std::string> IDENTIFIER
+%token <std::string> IDENTIFIER CLASSNAME ENUMNAME TYPEDEFNAME
 
 /* Literal */
 %token <std::intmax_t> INTVAL
@@ -80,8 +82,6 @@
 %token STATIC       STRUCT          SWITCH          THIS            
 %token TYPEDEF      UNSIGNED        VIRTUAL         VOID            WHILE
 
-%token DD  EE  FF
-
 /* Operator associativity */
 %left "::" '.' "->" ".*" "->*" '*' '/' '%' '+' '-' "<<" ">>" 
 %left '<' '>' "<=" ">=" "==" "!=" '&' '^' '|' "&&" "||" ','
@@ -98,9 +98,9 @@
 
 %type<ast::Ptr<ast::Expression>> primary_expression postfix_expression unary_expression equality_expression
 %type<ast::Ptr<ast::Expression>> cast_expression pm_expression multiplicative_expression logical_and_expression
-%type<ast::Ptr<ast::Expression>> additive_expression shift_expression relational_expression constant_expression
-%type<ast::Ptr<ast::Expression>> and_expression exclusive_or_expression inclusive_or_expression logical_or_expression
-%type<ast::Ptr<ast::Expression>> conditional_expression assignment_expression assignment_expression_opt
+%type<ast::Ptr<ast::Expression>> additive_expression shift_expression relational_expression constant_expression 
+%type<ast::Ptr<ast::Expression>> constant_expression_opt and_expression exclusive_or_expression inclusive_or_expression 
+%type<ast::Ptr<ast::Expression>> logical_or_expression conditional_expression assignment_expression assignment_expression_opt
 %type<ast::Ptr<ast::Expression>> expression expression_opt condition condition_opt constant_initializer 
 %type<ast::Ptr<ast::IdExpression>> id_expression unqualified_id qualified_id
 %type<ast::Ptr<ast::DestructorExpression>> pseudo_destructor_name
@@ -216,15 +216,15 @@ boolean_literal:
  * ------------------------------------------------------------------------- */
 
 typedef_name:
-    DD TYPEDEF identifier          { $$ = $3; }
+    TYPEDEFNAME                 { $$ = $1; }
 ;
 
 class_name:
-    EE CLASS identifier            { $$ = $3; }
+    CLASSNAME                   { $$ = $1; }
 ;
 
 enum_name:
-    FF ENUM identifier             { $$ = $3; }
+    ENUMNAME                    { $$ = $1; }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -255,7 +255,11 @@ id_expression:
 
 unqualified_id:
     identifier
-        { $$ = MkNode<IdExpression>(); $$->identifier = $1; }
+        { 
+            $$ = MkNode<IdExpression>(); 
+            $$->identifier = $1; 
+            pc.AddPossibleTypedefName($$->identifier);
+        }
 |   operator_function_id
         { $$ = $1; }
 |   conversion_function_id
@@ -830,8 +834,10 @@ expression_statement:
 compound_statement:
     '{' '}'
         { $$ = MkNode<CompoundStatement>(); }
-|   '{' statement_seq '}'
-        { $$ = $2; }
+|   '{'
+        { pc.EnterScope(); } 
+    statement_seq '}'
+        { $$ = $3; pc.LeaveScope(); }
 ;
 
 statement_seq:
@@ -947,12 +953,17 @@ block_declaration:
 
 simple_declaration:
     decl_specifier_seq ';'
-        { $$ = MkNode<BlockDeclaration>(); $$->declSpec = $1; }
+        { 
+            $$ = MkNode<BlockDeclaration>(); 
+            $$->declSpec = $1; 
+            pc.EndTypedef();
+        }
 |   decl_specifier_seq init_declarator_list ';'
         { 
             $$ = MkNode<BlockDeclaration>();
             $$->declSpec = $1;
             $$->initDeclList = $2;
+            pc.EndTypedef();
         }
 ;
     
@@ -964,7 +975,11 @@ decl_specifier:
 |   FRIEND
         { $$ = MkNode<DeclSpecifier>(); $$->isFriend = true; }
 |   TYPEDEF
-        { $$ = MkNode<DeclSpecifier>(); $$->isTypedef = true; }
+        { 
+            $$ = MkNode<DeclSpecifier>(); 
+            $$->isTypedef = true; 
+            pc.BeginTypedef();
+        }
 ;
     
 decl_specifier_seq:
@@ -1071,11 +1086,15 @@ enum_specifier:
         {
             $$ = MkNode<EnumSpecifier>();
             $$->identifier = $2;
+            if (!$$->identifier.empty())
+            pc.AddName($$->identifier, ParseContext::ENUM); 
         }
 |   ENUM identifier_opt '{' enumerator_list '}'
         {
             $$ = $4;
             $$->identifier = $2;
+            if (!$$->identifier.empty())
+            pc.AddName($$->identifier, ParseContext::ENUM); 
         }
 ;
     
@@ -1135,7 +1154,7 @@ direct_declarator:
             e->isFuncConst = $5;
             $$ = std::move(e);
         }
-|   direct_declarator '[' constant_expression ']' 
+|   direct_declarator '[' constant_expression_opt ']' 
         {
             auto e = MkNode<ArrayDeclarator>();
             e->elemType = $1;
@@ -1221,7 +1240,7 @@ direct_abstract_declarator:
             e->isFuncConst = $5;
             $$ = std::move(e);
         }
-|   direct_abstract_declarator_opt '[' constant_expression ']' 
+|   direct_abstract_declarator_opt '[' constant_expression_opt ']' 
         {
             auto e = MkNode<ArrayDeclarator>();
             e->elemType = $1;
@@ -1323,10 +1342,13 @@ initializer_list:
  * ------------------------------------------------------------------------- */
 
 class_specifier:
-    class_head '{' member_specification '}'
+    class_head '{' 
+        { pc.EnterScope(); } 
+    member_specification '}'
         { 
             $$ = $1; 
-            $$->members = $3;
+            $$->members = $4;
+            pc.LeaveScope();
         }
 ;
 
@@ -1344,6 +1366,8 @@ class_head:
             $$->nameSpec = $2;
             $$->identifier = $3;
             $$->baseSpec = $4;
+
+            pc.AddName($$->identifier, ParseContext::CLASS);
         }
 ;
 
@@ -1597,6 +1621,10 @@ abstract_declarator_opt:        { $$ = nullptr; }
 
 direct_abstract_declarator_opt: { $$ = nullptr; }
 |   direct_abstract_declarator  { $$ = $1; }
+;
+
+constant_expression_opt:        { $$ = nullptr; }
+|   constant_expression         { $$ = $1; }
 ;
 
 assignment_expression_opt:      { $$ = nullptr; }

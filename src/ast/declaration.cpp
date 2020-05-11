@@ -66,16 +66,15 @@ bool ElaboratedTypeSpecifier::operator==(const ElaboratedTypeSpecifier &other)
 
 void BlockDeclaration::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "块声明:\n";
-    declSpec->Print(os, indent + 1);
+    declSpec->Print(os, indent);
     for (std::size_t i = 0; i < initDeclList.size(); i++) {
-        os << indent + 1 << "声明符[" << i << "]:\n";
+        os << indent << "声明符[" << i << "]:\n";
 
-        initDeclList[i]->declarator->Print(os, indent + 2);
+        initDeclList[i]->declarator->Print(os, indent + 1);
 
         if (initDeclList[i]->initializer) {
-            os << indent + 2 << "初始化:\n";
-            initDeclList[i]->initializer->Print(os, indent + 3);
+            os << indent + 1 << "初始化:\n";
+            initDeclList[i]->initializer->Print(os, indent + 2);
         }
     }
 }
@@ -129,12 +128,12 @@ void ElaboratedTypeSpecifier::Print(std::ostream &os, Indent indent) const
     os << indent << "详述类型描述: ";
 
     switch (typeClass) {
-    case TypeClass::CLASSNAME: os << "类名";
-    case TypeClass::ENUMNAME: os << "枚举名";
-    case TypeClass::TYPEDEFNAME: os << "类型别名";
+    case TypeClass::CLASSNAME: os << "类名"; break;
+    case TypeClass::ENUMNAME: os << "枚举名"; break;
+    case TypeClass::TYPEDEFNAME: os << "类型别名"; break;
     }
 
-    os << typeName << (cv == CVQualifier::CONST ? " (const)\n" : "\n");
+    os << ' ' << typeName << (cv == CVQualifier::CONST ? " (const)\n" : "\n");
     if (nameSpec)
         nameSpec->Print(os, indent + 1);
 }

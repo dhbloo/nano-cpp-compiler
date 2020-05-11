@@ -577,7 +577,7 @@ struct FunctionDeclarator : Declarator
 struct ArrayDeclarator : Declarator
 {
     Ptr<Declarator> elemType;  // opt when abstract
-    Ptr<Expression> size;
+    Ptr<Expression> size;      // opt
 
     void Print(std::ostream &os, Indent indent) const override;
 };
