@@ -28,7 +28,14 @@ void Declarator::Print(std::ostream &os, Indent indent) const
 void FunctionDeclarator::Print(std::ostream &os, Indent indent) const
 {
     Declarator::Print(os, indent);
-    os << indent << "函数:" << (isFuncConst ? " (成员const)\n" : "\n");
+    os << indent << "函数: ";
+    if (isFuncConst)
+        os << "(成员const) ";
+    if (params.empty())
+        os << "(无参数)\n";
+    else
+        os << params.size() << " 参数\n";
+
     if (retType) {
         os << indent + 1 << "函数名:\n";
         retType->Print(os, indent + 2);
@@ -43,7 +50,7 @@ void FunctionDeclarator::Print(std::ostream &os, Indent indent) const
 void ArrayDeclarator::Print(std::ostream &os, Indent indent) const
 {
     Declarator::Print(os, indent);
-    os << indent << "数组:\n";
+    os << indent << "数组:" << (size ? "\n" : " (未知大小)\n");
     if (elemType) {
         os << indent + 1 << "数组元素类型:\n";
         elemType->Print(os, indent + 2);
@@ -77,18 +84,17 @@ void TypeId::Print(std::ostream &os, Indent indent) const
 
 void ParameterDeclaration::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "参数描述:\n";
-    os << indent + 1 << "类型描述:\n";
-    declSpec->Print(os, indent + 2);
+    os << indent << "类型描述:\n";
+    declSpec->Print(os, indent + 1);
 
     if (decl) {
-        os << indent + 1 << "描述符:\n";
-        decl->Print(os, indent + 2);
+        os << indent << "描述符:\n";
+        decl->Print(os, indent + 1);
     }
 
     if (defaultExpr) {
-        os << indent + 1 << "默认值:\n";
-        defaultExpr->Print(os, indent + 2);
+        os << indent << "默认值:\n";
+        defaultExpr->Print(os, indent + 1);
     }
 }
 

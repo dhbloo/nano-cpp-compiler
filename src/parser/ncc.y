@@ -132,12 +132,12 @@
 %type<FundTypePart> simple_type_specifier
 %type<CVQualifier> cv_qualifier
 
-%type<ast::PtrVec<ast::InitDeclarator>> init_declarator_list
-%type<ast::Ptr<ast::InitDeclarator>> init_declarator
+%type<std::vector<ast::BlockDeclaration::InitDecl>> init_declarator_list
+%type<ast::BlockDeclaration::InitDecl> init_declarator
 %type<ast::Ptr<ast::PtrSpecifier>> ptr_operator_list conversion_declarator conversion_declarator_opt
 %type<ast::PtrSpecifier::PtrOp> ptr_operator
 %type<ast::Ptr<ast::Declarator>> declarator direct_declarator abstract_declarator direct_abstract_declarator
-%type<ast::Ptr<ast::Declarator>> direct_abstract_declarator_opt abstract_declarator_opt
+%type<ast::Ptr<ast::Declarator>> abstract_declarator_opt
 %type<ast::Ptr<ast::IdDeclarator>> declarator_id
 %type<ast::Ptr<ast::TypeId>> type_id
 %type<ast::PtrVec<ast::ParameterDeclaration>> parameter_declaration_list
@@ -450,18 +450,9 @@ new_placememt:
 
 new_type_id:
     type_specifier_seq
-        {
-            $$ = MkNode<InitializableNew>();
-            $$->typeSpec = $1;
-        }
+        { $$ = MkNode<InitializableNew>(); $$->typeSpec = $1; }
 |   type_specifier_seq new_declarator
-        { 
-            auto e = $2;
-            auto ss = e->typeSpec->Combine($1);
-            if (ss)
-                throw syntax_error(@$, ss.moveMsg());
-            $$ = std::move(e);
-        }
+        { $$ = $2; $$->typeSpec = $1; }
 ;
 
 new_declarator:
@@ -988,7 +979,7 @@ decl_specifier_seq:
 |   decl_specifier_seq decl_specifier
         { 
             $$ = $1;
-            auto ss = $$->Combine($2);
+            auto ss = Combine(std::move($$), $2, $$);
             if (ss)
                 throw syntax_error(@$, ss.moveMsg());
         }
@@ -1128,11 +1119,16 @@ init_declarator_list:
 ;
 
 init_declarator:
-    declarator initializer_opt
+    direct_declarator initializer_opt
         {
-            $$ = MkNode<InitDeclarator>();
-            $$->declarator = $1;
-            $$->initializer = $2;
+            $$.declarator = $1;
+            $$.initializer = $2;
+        }
+|   ptr_operator_list direct_declarator initializer_opt
+        {
+            $$.declarator = $2;
+            $$.declarator->ptrSpec = $1;
+            $$.initializer = $3;
         }
 ;
     
@@ -1216,7 +1212,7 @@ type_specifier_seq:
 |   type_specifier_seq type_specifier
         {
             $$ = $1;
-            auto ss = $$->Combine($2);
+            auto ss = Combine(std::move($$), $2, $$);
             if (ss)
                 throw syntax_error(@$, ss.moveMsg());
         }
@@ -1232,7 +1228,20 @@ abstract_declarator:
 ;
 
 direct_abstract_declarator:
-    direct_abstract_declarator_opt '(' parameter_declaration_list ')' cv_qualifier_opt
+    '(' parameter_declaration_list ')' cv_qualifier_opt
+        {
+            auto e = MkNode<FunctionDeclarator>();
+            e->params = $2;
+            e->isFuncConst = $4;
+            $$ = std::move(e);
+        }
+|   '[' constant_expression_opt ']'
+        {
+            auto e = MkNode<ArrayDeclarator>();
+            e->size = $2;
+            $$ = std::move(e);
+        }
+|   direct_abstract_declarator '(' parameter_declaration_list ')' cv_qualifier_opt
         {
             auto e = MkNode<FunctionDeclarator>();
             e->retType = $1;
@@ -1240,7 +1249,7 @@ direct_abstract_declarator:
             e->isFuncConst = $5;
             $$ = std::move(e);
         }
-|   direct_abstract_declarator_opt '[' constant_expression_opt ']' 
+|   direct_abstract_declarator '[' constant_expression_opt ']' 
         {
             auto e = MkNode<ArrayDeclarator>();
             e->elemType = $1;
@@ -1387,7 +1396,7 @@ member_specification:
 member_declaration:
     decl_specifier_seq member_declarator_list ';'
         {
-            auto e = MkNode<MemberVariable>();
+            auto e = MkNode<MemberDefinition>();
             e->declSpec = $1;
             e->decls = $2;
             $$ = std::move(e);
@@ -1617,10 +1626,6 @@ cv_qualifier_opt:               { $$ = false; }
 
 abstract_declarator_opt:        { $$ = nullptr; }
 |   abstract_declarator         { $$ = $1; }
-;
-
-direct_abstract_declarator_opt: { $$ = nullptr; }
-|   direct_abstract_declarator  { $$ = $1; }
 ;
 
 constant_expression_opt:        { $$ = nullptr; }

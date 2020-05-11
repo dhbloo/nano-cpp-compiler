@@ -95,7 +95,7 @@ struct ParenthesisInitializer;
 struct ClassSpecifier;
 struct MemberList;
 struct MemberDeclaration;
-struct MemberVariable;
+struct MemberDefinition;
 struct MemberDeclarator;
 struct MemberFunction;
 
@@ -466,8 +466,14 @@ struct Declaration : Node
 
 struct BlockDeclaration : Declaration
 {
-    Ptr<DeclSpecifier>     declSpec;
-    PtrVec<InitDeclarator> initDeclList;
+    Ptr<DeclSpecifier> declSpec;
+
+    struct InitDecl
+    {
+        Ptr<Declarator>  declarator;
+        Ptr<Initializer> initializer;  // opt
+    };
+    std::vector<InitDecl> initDeclList;
 
     void Print(std::ostream &os, Indent indent) const override;
 };
@@ -477,24 +483,28 @@ struct DeclSpecifier : Node
     bool               isFriend, isVirtual, isTypedef;
     Ptr<TypeSpecifier> typeSpec;
 
-    SyntaxStatus Combine(Ptr<DeclSpecifier> other);
-    void         Print(std::ostream &os, Indent indent) const override;
+    friend SyntaxStatus
+         Combine(Ptr<DeclSpecifier> n1, Ptr<DeclSpecifier> n2, Ptr<DeclSpecifier> &out);
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct TypeSpecifier : Node
 {
     CVQualifier cv;
 
-    SyntaxStatus Combine(Ptr<TypeSpecifier> other);
-    void         Print(std::ostream &os, Indent indent) const override;
+    friend SyntaxStatus
+         Combine(Ptr<TypeSpecifier> n1, Ptr<TypeSpecifier> n2, Ptr<TypeSpecifier> &out);
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct SimpleTypeSpecifier : TypeSpecifier
 {
     FundTypePart fundTypePart;
 
-    SyntaxStatus Combine(SimpleTypeSpecifier *other);
-    void         Print(std::ostream &os, Indent indent) const override;
+    friend SyntaxStatus Combine(Ptr<SimpleTypeSpecifier>  n1,
+                                Ptr<SimpleTypeSpecifier>  n2,
+                                Ptr<SimpleTypeSpecifier> &out);
+    void                Print(std::ostream &os, Indent indent) const override;
 };
 
 struct ElaboratedTypeSpecifier : TypeSpecifier
@@ -535,12 +545,6 @@ struct EnumSpecifier : Node
 /* ------------------------------------------------------------------------- *
  * 5. Declarator
  * ------------------------------------------------------------------------- */
-
-struct InitDeclarator : Node
-{
-    Ptr<Declarator>  declarator;
-    Ptr<Initializer> initializer;  // opt
-};
 
 struct PtrSpecifier : Node
 {
@@ -680,7 +684,7 @@ struct MemberList : Node
 struct MemberDeclaration : Node
 {};
 
-struct MemberVariable : MemberDeclaration
+struct MemberDefinition : MemberDeclaration
 {
     Ptr<DeclSpecifier>       declSpec;
     PtrVec<MemberDeclarator> decls;

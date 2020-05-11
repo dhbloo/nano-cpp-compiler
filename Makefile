@@ -18,7 +18,7 @@ ast: src/ast/node.h src/ast/basic.cpp src/ast/expression.cpp src/ast/declaration
 	$(CXX) -c -o bin/ast_class.o src/ast/class.cpp
 	$(CXX) -c -o bin/ast_statement.o src/ast/statement.cpp
 
-lextest: yylexer
+lextest: yylexer yyparser ast
 	$(CXX) -o bin/lextest.exe src/lexer/lextest.cpp bin/yylexer.o bin/yyparser.o \
 		bin/context.o bin/ast_basic.o bin/ast_expression.o bin/ast_declaration.o \
 		bin/ast_class.o bin/ast_statement.o bin/ast_declarator.o

@@ -35,42 +35,42 @@ void ClassSpecifier::Print(std::ostream &os, Indent indent) const
        << (members ? "\n" : " (空类)\n");
 
     if (nameSpec)
-        nameSpec->Print(os, indent + 1);
+        nameSpec->Print(os, indent);
 
     if (baseSpec)
-        baseSpec->Print(os, indent + 1);
+        baseSpec->Print(os, indent);
 
     if (members)
-        members->Print(os, indent + 1);
+        members->Print(os, indent);
 }
 
 void MemberList::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "类成员列表:\n";
     for (std::size_t i = 0; i < publicMember.size(); i++) {
-        os << indent + 1 << "公有成员[" << i << "]:\n";
-        publicMember[i]->Print(os, indent + 2);
+        os << indent + 1 << "公有成员[" << i << "]: ";
+        publicMember[i]->Print(os, indent + 1);
     }
     for (std::size_t i = 0; i < protectedMember.size(); i++) {
-        os << indent + 1 << "保护成员[" << i << "]:\n";
-        protectedMember[i]->Print(os, indent + 2);
+        os << indent + 1 << "保护成员[" << i << "]: ";
+        protectedMember[i]->Print(os, indent + 1);
     }
     for (std::size_t i = 0; i < privateMember.size(); i++) {
-        os << indent + 1 << "私有成员[" << i << "]:\n";
-        privateMember[i]->Print(os, indent + 2);
+        os << indent + 1 << "私有成员[" << i << "]: ";
+        privateMember[i]->Print(os, indent + 1);
     }
     for (std::size_t i = 0; i < defaultMember.size(); i++) {
-        os << indent + 1 << "默认成员[" << i << "]:\n";
-        defaultMember[i]->Print(os, indent + 2);
+        os << indent + 1 << "默认成员[" << i << "]: ";
+        defaultMember[i]->Print(os, indent + 1);
     }
 }
 
-void MemberVariable::Print(std::ostream &os, Indent indent) const
+void MemberDefinition::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "成员变量:\n";
+    os << "成员定义\n";
     declSpec->Print(os, indent + 1);
     for (std::size_t i = 0; i < decls.size(); i++) {
-        os << indent + 1 << "变量[" << i << "]:" << (decls[i]->isPure ? " (纯虚函数)\n" : "\n");
+        os << indent + 1 << "成员[" << i << "]:" << (decls[i]->isPure ? " (纯虚函数)\n" : "\n");
         decls[i]->decl->Print(os, indent + 2);
         if (decls[i]->constInit) {
             os << indent + 1 << "初始化:\n";
@@ -81,7 +81,7 @@ void MemberVariable::Print(std::ostream &os, Indent indent) const
 
 void MemberFunction::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "成员函数:\n";
+    os << "成员函数\n";
     func->Print(os, indent + 1);
 }
 

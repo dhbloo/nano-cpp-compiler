@@ -2,66 +2,81 @@
 
 namespace ast {
 
-SyntaxStatus DeclSpecifier::Combine(Ptr<DeclSpecifier> other)
+SyntaxStatus Combine(Ptr<DeclSpecifier> n1, Ptr<DeclSpecifier> n2, Ptr<DeclSpecifier> &out)
 {
-    if (isFriend && other->isFriend)
+    if (n1->isFriend && n2->isFriend)
         return "duplicate friend specifier";
     else
-        isFriend = isFriend || other->isFriend;
+        n1->isFriend = n1->isFriend || n2->isFriend;
 
-    if (isVirtual && other->isVirtual)
+    if (n1->isVirtual && n2->isVirtual)
         return "duplicate virtual specifier";
     else
-        isVirtual = isVirtual || other->isVirtual;
+        n1->isVirtual = n1->isVirtual || n2->isVirtual;
 
-    if (isTypedef && other->isTypedef)
+    if (n1->isTypedef && n2->isTypedef)
         return "duplicate typedef specifier";
     else
-        isTypedef = isTypedef || other->isTypedef;
+        n1->isTypedef = n1->isTypedef || n2->isTypedef;
 
-    if (typeSpec && other->typeSpec) {
-        auto ss = typeSpec->Combine(std::move(other->typeSpec));
+    if (n1->typeSpec && n2->typeSpec) {
+        auto ss = Combine(std::move(n1->typeSpec), std::move(n2->typeSpec), n1->typeSpec);
         if (ss)
             return ss;
     }
-    else if (other->typeSpec)
-        typeSpec = std::move(other->typeSpec);
+    else if (n2->typeSpec)
+        n1->typeSpec = std::move(n2->typeSpec);
 
+    out = std::move(n1);
     return {};
 }
 
-SyntaxStatus TypeSpecifier::Combine(Ptr<TypeSpecifier> other)
+SyntaxStatus Combine(Ptr<TypeSpecifier> n1, Ptr<TypeSpecifier> n2, Ptr<TypeSpecifier> &out)
 {
-    if (typeid(*this) == typeid(SimpleTypeSpecifier)
-        && typeid(*other) == typeid(SimpleTypeSpecifier)) {
-        auto t  = static_cast<SimpleTypeSpecifier *>(other.get());
-        auto ss = static_cast<SimpleTypeSpecifier *>(this)->Combine(t);
+    if (typeid(*n1) == typeid(SimpleTypeSpecifier) && typeid(*n2) == typeid(SimpleTypeSpecifier)) {
+        Ptr<SimpleTypeSpecifier> t1 {static_cast<SimpleTypeSpecifier *>(n1.release())};
+        Ptr<SimpleTypeSpecifier> t2 {static_cast<SimpleTypeSpecifier *>(n2.release())};
+        Ptr<SimpleTypeSpecifier> tout;
+
+        auto ss = Combine(std::move(t1), std::move(t2), tout);
+        out     = std::move(tout);
         if (ss)
             return ss;
     }
-    else if (typeid(*this) == typeid(TypeSpecifier) && typeid(*other) == typeid(TypeSpecifier)) {
+    else if (typeid(*n1) == typeid(TypeSpecifier) && typeid(*n2) == typeid(TypeSpecifier)) {
         return "duplicate const specifier";
     }
-    else if (typeid(*this) != typeid(TypeSpecifier) && typeid(*other) != typeid(TypeSpecifier)) {
+    else if (typeid(*n1) != typeid(TypeSpecifier) && typeid(*n2) != typeid(TypeSpecifier)) {
         return "more than one type are specified";
+    }
+    else if (typeid(*n1) == typeid(TypeSpecifier)) {
+        n2->cv = n1->cv;
+        out    = std::move(n2);
+    }
+    else {
+        n1->cv = n2->cv;
+        out    = std::move(n1);
     }
 
     return {};
 }
 
-SyntaxStatus SimpleTypeSpecifier::Combine(SimpleTypeSpecifier *other)
+SyntaxStatus
+Combine(Ptr<SimpleTypeSpecifier> n1, Ptr<SimpleTypeSpecifier> n2, Ptr<SimpleTypeSpecifier> &out)
 {
-    if ((int)fundTypePart & (int)other->fundTypePart)
-        return "cannot Combine two types";
+    if ((int)n1->fundTypePart & (int)n2->fundTypePart)
+        return "cannot combine two types";
     else {
-        fundTypePart = FundTypePart((int)fundTypePart | (int)other->fundTypePart);
+        n1->fundTypePart = FundTypePart((int)n1->fundTypePart | (int)n2->fundTypePart);
+
+        out = std::move(n1);
         return {};
     }
 }
 
-bool ElaboratedTypeSpecifier::operator==(const ElaboratedTypeSpecifier &other)
+bool ElaboratedTypeSpecifier::operator==(const ElaboratedTypeSpecifier &n2)
 {
-    return nameSpec == other.nameSpec && typeClass == other.typeClass && typeName == other.typeName;
+    return nameSpec == n2.nameSpec && typeClass == n2.typeClass && typeName == n2.typeName;
 }
 
 void BlockDeclaration::Print(std::ostream &os, Indent indent) const
@@ -70,11 +85,10 @@ void BlockDeclaration::Print(std::ostream &os, Indent indent) const
     for (std::size_t i = 0; i < initDeclList.size(); i++) {
         os << indent << "声明符[" << i << "]:\n";
 
-        initDeclList[i]->declarator->Print(os, indent + 1);
+        initDeclList[i].declarator->Print(os, indent + 1);
 
-        if (initDeclList[i]->initializer) {
-            os << indent + 1 << "初始化:\n";
-            initDeclList[i]->initializer->Print(os, indent + 2);
+        if (initDeclList[i].initializer) {
+            initDeclList[i].initializer->Print(os, indent + 1);
         }
     }
 }
@@ -106,21 +120,20 @@ void TypeSpecifier::Print(std::ostream &os, Indent indent) const
 void SimpleTypeSpecifier::Print(std::ostream &os, Indent indent) const
 {
     const char *FUNDTYPEPART_NAME[] =
-        {"VOID", "BOOL", "SHORT", "INT", "LONG", "CHAR", "FLOAT", "DOUBLE", "SIGNED", "UNSIGNED"};
+        {"BOOL", "SHORT", "INT", "LONG", "CHAR", "FLOAT", "DOUBLE", "SIGNED", "UNSIGNED"};
 
     os << indent << "简单类型描述: ";
 
     if (cv == CVQualifier::CONST)
         os << "(const) ";
 
-    for (int i = 0; i + 1 < sizeof(FUNDTYPEPART_NAME) / sizeof(FUNDTYPEPART_NAME[0]); i++) {
+    for (int i = 0; i < sizeof(FUNDTYPEPART_NAME) / sizeof(FUNDTYPEPART_NAME[0]); i++) {
         int mask = 1 << i;
         if (((int)fundTypePart & mask) == mask)
-            os << FUNDTYPEPART_NAME[1 + i];
+            os << FUNDTYPEPART_NAME[i] << ' ';
     }
-    if (fundTypePart == FundTypePart::VOID)
-        os << FUNDTYPEPART_NAME[0];
-    os << '\n';
+
+    os << (fundTypePart == FundTypePart::VOID ? "VOID\n" : "\n");
 }
 
 void ElaboratedTypeSpecifier::Print(std::ostream &os, Indent indent) const
@@ -128,9 +141,9 @@ void ElaboratedTypeSpecifier::Print(std::ostream &os, Indent indent) const
     os << indent << "详述类型描述: ";
 
     switch (typeClass) {
-    case TypeClass::CLASSNAME: os << "类名"; break;
-    case TypeClass::ENUMNAME: os << "枚举名"; break;
-    case TypeClass::TYPEDEFNAME: os << "类型别名"; break;
+    case TypeClass::CLASSNAME: os << "(类)"; break;
+    case TypeClass::ENUMNAME: os << "(枚举)"; break;
+    case TypeClass::TYPEDEFNAME: os << "(类型别名)"; break;
     }
 
     os << ' ' << typeName << (cv == CVQualifier::CONST ? " (const)\n" : "\n");
@@ -152,10 +165,12 @@ void EnumTypeSpecifier::Print(std::ostream &os, Indent indent) const
 
 void EnumSpecifier::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "枚举名: " << identifier;
+    os << indent << "枚举名: " << identifier << '\n';
     for (std::size_t i = 0; i < enumList.size(); i++) {
-        os << indent + 1 << "枚举值[" << i << "], 名称: " << enumList[i].first << '\n';
-        enumList[i].second->Print(os, indent + 2);
+        os << indent << "枚举值[" << i << "], 名称: " << enumList[i].first << '\n';
+
+        if (enumList[i].second)
+            enumList[i].second->Print(os, indent + 1);
     }
 }
 

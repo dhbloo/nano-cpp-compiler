@@ -3,7 +3,7 @@ char b;
 float c;
 double d;
 
-int x, y, z;
+const int x(1), y(1 + 2), z = 2 + 3;
 long i, j, k;
 
 unsigned int aa;
@@ -13,14 +13,14 @@ short int dd;
 unsigned long int ee;
 signed short int ff;
 
-int t = 1, &rt = t;
+int t = 1, &rt = t, w(1+2), &rw(w);
 float u = 2.0f;
 char v = 'r';
 
 int arr[10], arr2[5][6], arr3[2][3][4];
 
 int *pa, **ppa, *paa[5], &ra = t;
-char ** ppb, *&prb;
+char ** ppb, *&prb = *ppb;
 
 void f(int);
 void (*p1)(int) = &f;
@@ -29,7 +29,7 @@ void (*p2)(int) = f;
 const int ci = 10, *pc = &ci, *const cpc = pc, **ppc;
 int ii, *p, *const cp = &ii;
 
-int (*(*x[2])())[3];
+int (*(*fx[2])())[3];
 char* (*foo)(char*);
-char* (*(*foo[5])(char*))[10];
+char* (*(*fuu[5])(char*))[10];
 char * const (*(* const bar)[5])(int);

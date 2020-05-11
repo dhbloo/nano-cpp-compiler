@@ -7,8 +7,8 @@
 //#include "stdafx.h"
 
 int a, b, c;
-int 1x;
-int x+1;
+//int 1x;
+//int x+1;
 int x=3+a;
 char cChar;
 float m, n;

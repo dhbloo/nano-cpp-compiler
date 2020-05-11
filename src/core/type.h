@@ -1,16 +1,19 @@
 #pragma once
 
 enum class FundTypePart {
-    VOID     = 0,
-    BOOL     = 1,
-    SHORT    = 2,
-    INT      = 4,
-    LONG     = 8,
-    CHAR     = 16,
-    FLOAT    = 32,
-    DOUBLE   = 64,
-    SIGNED   = 128,
-    UNSIGNED = 256
+    VOID     = 512 | 1024 | 2048 | 0,
+    BOOL     = 512 | 1024 | 2048 | 1,
+    SHORT    = 1024 | 2,
+    INT      = 512 | 4,
+    LONG     = 1024 | 8,
+    CHAR     = 512 | 1024 | 16,
+    FLOAT    = 512 | 1024 | 2048 | 32,
+    DOUBLE   = 512 | 1024 | 2048 | 64,
+    SIGNED   = 2048 | 128,
+    UNSIGNED = 2048 | 256,
+    HASINT   = 512,
+    HASINTS  = 1024,
+    HASSIGN  = 2048
 };
 
 enum class FundType {
@@ -29,14 +32,6 @@ enum class FundType {
     DOUBLE
 };
 
-enum class CVQualifier {
-    NONE,
-    CONST
-};
+enum class CVQualifier { NONE, CONST };
 
-enum class Access {
-    DEFAULT,
-    PUBLIC,
-    PROTECTED,
-    PRIVATE
-};
+enum class Access { DEFAULT, PUBLIC, PROTECTED, PRIVATE };

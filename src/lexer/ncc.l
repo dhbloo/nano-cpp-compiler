@@ -10,10 +10,10 @@
 static int yycolumn;
 
 #define YY_USER_INIT yycolumn = 1;
-#define YY_USER_ACTION {                                \
-    yylloc->initialize(nullptr, yylineno, yycolumn);    \
-    yylloc->columns(yyleng - 1);                        \
-    yycolumn += yyleng;                                 \
+#define YY_USER_ACTION {                              \
+    yylloc->initialize(nullptr, yylineno, yycolumn);  \
+    yylloc->columns(yyleng);                          \
+    yycolumn += yyleng;                               \
 }
 
 static bool lookup_escape_char(char& c);
