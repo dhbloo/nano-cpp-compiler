@@ -126,7 +126,7 @@
 %type<ast::Ptr<ast::BlockDeclaration>> block_declaration simple_declaration
 %type<ast::Ptr<ast::DeclSpecifier>> decl_specifier_seq decl_specifier function_specifier
 %type<ast::Ptr<ast::TypeSpecifier>> type_specifier type_specifier_seq
-%type<ast::Ptr<ast::ElaboratedTypeSpecifier>> elaborated_type_specifier forward_class_specifier type_name
+%type<ast::Ptr<ast::ElaboratedTypeSpecifier>> elaborated_type_specifier simple_typename_specifier forward_class_specifier type_name
 %type<ast::Ptr<ast::EnumSpecifier>> enum_specifier enumerator_list
 %type<ast::EnumSpecifier::Enumerator> enumerator_definition
 %type<FundTypePart> simple_type_specifier
@@ -157,12 +157,12 @@
 %type<Access> access_specifier
 
 %type<ast::Ptr<ast::ConversionFunctionId>> conversion_function_id conversion_type_id
-%type<ast::PtrVec<ast::CtorMemberInitializer>> ctor_initializer mem_initializer_list
+%type<ast::PtrVec<ast::CtorMemberInitializer>> ctor_initializer ctor_initializer_opt mem_initializer_list
 %type<ast::Ptr<ast::CtorMemberInitializer>> mem_initializer mem_initializer_id
 %type<ast::Ptr<ast::OperatorFunctionId>> operator_function_id
 %type<Operator> operator
 
-%type<bool> COLONCOLON_opt cv_qualifier_opt pure_specifier_opt
+%type<bool> cv_qualifier_opt pure_specifier_opt
 %type<std::string> identifier identifier_opt enumerator typedef_name class_name enum_name
 
 %start translation_unit
@@ -268,13 +268,25 @@ unqualified_id:
         {
             $$ = MkNode<IdExpression>();
             $$->identifier = $2; 
-            $$->isDestructor = true;
+            $$->stype = IdExpression::DESTRUCTOR;
         }
 ;
 
 qualified_id:
-    COLONCOLON_opt nested_name_specifier unqualified_id
-        { $$ = $3; $$->nameSpec = $2; $$->nameSpec->isGlobal = $1; }
+    nested_name_specifier unqualified_id
+        { 
+            $$ = $2; 
+            $$->nameSpec = $1; 
+            $$->nameSpec->isGlobal = false; 
+            pc.PopQueryScopes();
+        }
+|   "::" nested_name_specifier unqualified_id
+        { 
+            $$ = $3; 
+            $$->nameSpec = $2; 
+            $$->nameSpec->isGlobal = true; 
+            pc.PopQueryScopes();
+        }
 |   "::" identifier
         {
             $$ = MkNode<IdExpression>(); 
@@ -288,9 +300,17 @@ qualified_id:
 
 nested_name_specifier:
     class_name "::"
-        { $$ = MkNode<NameSpecifier>(); $$->path.push_back($1); }
+        { 
+            $$ = MkNode<NameSpecifier>(); 
+            $$->path.push_back($1);
+            pc.PushQueryScope($$->path.back());
+        }
 |   nested_name_specifier class_name "::"
-        { $$ = $1; $$->path.push_back($2); }
+        { 
+            $$ = $1; 
+            $$->path.push_back($2);
+            pc.PushQueryScope($$->path.back());
+        }
 ;
 
 postfix_expression:
@@ -311,6 +331,13 @@ postfix_expression:
             e->params = $3;
             $$ = std::move(e);
         }
+|   simple_typename_specifier '{' expression_list_opt '}'
+        {
+            auto e = MkNode<ConstructExpression>();
+            e->type = $1;
+            e->params = $3;
+            $$ = std::move(e);
+        }
 |   postfix_expression '.' unqualified_id
         {
             auto e = MkNode<BinaryExpression>();
@@ -319,16 +346,31 @@ postfix_expression:
             e->right = $3;
             $$ = std::move(e);
         }
-|   postfix_expression '.' COLONCOLON_opt nested_name_specifier unqualified_id
+|   postfix_expression '.' nested_name_specifier unqualified_id
         {
+            auto r = $4;
+            r->nameSpec = $3;
+            r->nameSpec->isGlobal = false;
+
             auto e = MkNode<BinaryExpression>();
             e->op = BinaryOp::DOT;
             e->left = $1;
-            auto r = $5;
-            r->nameSpec = $4;
-            r->nameSpec->isGlobal = $3;
             e->right = std::move(r);
             $$ = std::move(e);
+            pc.PopQueryScopes();
+        }
+|   postfix_expression '.' "::" nested_name_specifier unqualified_id
+        {
+            auto r = $5;
+            r->nameSpec = $4;
+            r->nameSpec->isGlobal = true;
+            
+            auto e = MkNode<BinaryExpression>();
+            e->op = BinaryOp::DOT;
+            e->left = $1;
+            e->right = std::move(r);
+            $$ = std::move(e);
+            pc.PopQueryScopes();
         }
 |   postfix_expression "->" unqualified_id
         {
@@ -402,18 +444,18 @@ unary_operator:
 ;
 
 new_expression:
-    COLONCOLON_opt NEW new_placememt_opt new_type_id new_initializer_opt
+    NEW new_placememt_opt new_type_id new_initializer_opt
         {
-            auto e = $4;
-            e->initializer = $5;
-            e->placement = $3;
+            auto e = $3;
+            e->initializer = $4;
+            e->placement = $2;
             $$ = std::move(e);
         }
-|   COLONCOLON_opt NEW '(' type_id ')' new_placememt_opt
+|   NEW '(' type_id ')' new_placememt_opt
         {
             auto e = MkNode<PlainNew>();
-            e->typeId = $4;
-            e->placement = $6;
+            e->typeId = $3;
+            e->placement = $5;
             $$ = std::move(e);
         }
 ;
@@ -463,17 +505,17 @@ new_initializer:
 ;
 
 delete_expression:
-    COLONCOLON_opt DELETE cast_expression
+    DELETE cast_expression
         {
             $$ = MkNode<DeleteExpression>();
             $$->isArray = false;
-            $$->expr = $3;
+            $$->expr = $2;
         }
-|   COLONCOLON_opt DELETE '[' ']' cast_expression
+|   DELETE '[' ']' cast_expression
         {
             $$ = MkNode<DeleteExpression>();
             $$->isArray = true;
-            $$->expr = $5;
+            $$->expr = $4;
         }
 ;
 
@@ -800,7 +842,7 @@ compound_statement:
     '{' '}'
         { $$ = MkNode<CompoundStatement>(); }
 |   '{'
-        { pc.EnterScope(); } 
+        { pc.EnterAnonymousScope(); } 
     statement_seq '}'
         { $$ = $3; pc.LeaveScope(); }
 ;
@@ -811,9 +853,9 @@ statement_seq:
 |   statement_seq statement
         { $$ = $1; $$->stmts.push_back($2); }
 |   error ';'
-        {}
+        { pc.PopQueryScopes(); }
 |   statement_seq error ';'
-        { $$ = $1; }
+        { $$ = $1; pc.PopQueryScopes(); }
 ;
 
 selection_statement:
@@ -910,13 +952,13 @@ declaration_seq:
 |   declaration_seq declaration
         { $$ = $1; $$.push_back($2); }
 |   error
-        {}
+        { pc.PopQueryScopes(); }
 |   error ';'
-        { yyclearin; yyerrok; }
+        { pc.PopQueryScopes(); yyclearin; yyerrok; }
 |   declaration_seq error
-        { $$ = $1; }
+        { $$ = $1; pc.PopQueryScopes(); }
 |   declaration_seq error ';'
-        { $$ = $1; yyclearin; yyerrok; }
+        { $$ = $1; pc.PopQueryScopes(); yyclearin; yyerrok; }
 ;
     
 declaration:
@@ -979,7 +1021,7 @@ function_specifier:
 ;
 
 type_specifier:
-    simple_type_specifier       
+    simple_type_specifier
         { 
             auto e = MkNode<SimpleTypeSpecifier>(); 
             e->fundTypePart = $1; 
@@ -1006,7 +1048,7 @@ type_specifier:
             $$ = std::move(e);
         }
 ;
-    
+
 simple_type_specifier:
     CHAR                        { $$ = FundTypePart::CHAR; }
 |   BOOL                        { $$ = FundTypePart::BOOL; }
@@ -1040,43 +1082,39 @@ type_name:
             $$->typeName = $1;
         }
 ;
+
+simple_typename_specifier:
+    type_name
+        { 
+            $$ = $1; 
+        }
+|   nested_name_specifier type_name
+        { 
+            $$ = $2; 
+            $$->nameSpec = $1; 
+            pc.PopQueryScopes();
+        }
+;
     
 elaborated_type_specifier:
-    COLONCOLON_opt type_name
-        { $$ = $2; $$->nameSpec = MkNode<NameSpecifier>($1); }
-|   COLONCOLON_opt nested_name_specifier type_name
-        { $$ = $3; $$->nameSpec = $2; $$->nameSpec->isGlobal = $1; }
-|   class_key COLONCOLON_opt class_name
-        { 
-            $$ = MkNode<ElaboratedTypeSpecifier>();
-            $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
-            $$->typeName = $3;
-            $$->nameSpec = MkNode<NameSpecifier>($2);
-        }
-|   class_key COLONCOLON_opt nested_name_specifier class_name
-        { 
-            $$ = MkNode<ElaboratedTypeSpecifier>();  
-            $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
-            $$->typeName = $4;
-            $$->nameSpec = $3;
-            $$->nameSpec->isGlobal = $2;
-        }
+    simple_typename_specifier
+        { $$ = $1; }
 |   forward_class_specifier
         { $$ = $1; }
-|   ENUM COLONCOLON_opt enum_name
+|   ENUM enum_name
+        { 
+            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
+            $$->typeName = $2;
+            pc.PopQueryScopes();
+        }
+|   ENUM nested_name_specifier enum_name
         { 
             $$ = MkNode<ElaboratedTypeSpecifier>();  
             $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
             $$->typeName = $3;
-            $$->nameSpec = MkNode<NameSpecifier>($2);
-        }
-|   ENUM COLONCOLON_opt nested_name_specifier enum_name
-        { 
-            $$ = MkNode<ElaboratedTypeSpecifier>();  
-            $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
-            $$->typeName = $4;
-            $$->nameSpec = $3;
-            $$->nameSpec->isGlobal = $2;
+            $$->nameSpec = $2;
+            pc.PopQueryScopes();
         }
 ;
     
@@ -1085,15 +1123,19 @@ enum_specifier:
         {
             $$ = MkNode<EnumSpecifier>();
             $$->identifier = $2;
+
             if (!$$->identifier.empty())
-            pc.AddName($$->identifier, ParseContext::ENUM); 
+                if (!pc.AddName($$->identifier, ParseContext::ENUM))
+                    throw syntax_error(@3, "redeclear of identifier " + $$->identifier);
         }
 |   ENUM identifier_opt '{' enumerator_list '}'
         {
             $$ = $4;
             $$->identifier = $2;
+
             if (!$$->identifier.empty())
-            pc.AddName($$->identifier, ParseContext::ENUM); 
+                if (!pc.AddName($$->identifier, ParseContext::ENUM))
+                    throw syntax_error(@3, "redeclear of identifier " + $$->identifier);
         }
 ;
     
@@ -1188,12 +1230,12 @@ ptr_operator:
         }
 |   '&'
         { $$.ptrType = PtrSpecifier::REF; }
-|   COLONCOLON_opt nested_name_specifier '*' cv_qualifier_opt
+|   nested_name_specifier '*' cv_qualifier_opt
         {
             $$.ptrType = PtrSpecifier::CLASSPTR; 
-            $$.isPtrConst = $4;
-            $$.classNameSpec = $2;
-            $$.classNameSpec->isGlobal = $1;
+            $$.isPtrConst = $3;
+            $$.classNameSpec = $1;
+            pc.PopQueryScopes();
         }
 ;
     
@@ -1305,12 +1347,30 @@ function_definition:
             $$->declarator = $1;
             $$->funcBody = $2;
         }
-|   declarator ctor_initializer function_body
+|   decl_specifier_seq '(' parameter_declaration_list ')' ctor_initializer_opt function_body
         {
+            auto decl = $1;
+            if (typeid(*decl->typeSpec) != typeid(ElaboratedTypeSpecifier))
+                throw syntax_error(@2, "expect member name or ';' here");
+
+            auto edecl = static_cast<ElaboratedTypeSpecifier*>(decl->typeSpec.get());
+            if (edecl->typeClass != ElaboratedTypeSpecifier::CLASSNAME
+                || edecl->typeName != pc.CurLocalScopeName())
+                throw syntax_error(@1, "expect member name or ';' here");
+
+            auto i = MkNode<IdDeclarator>();
+            i->id = MkNode<IdExpression>();
+            i->id->identifier = edecl->typeName;
+            i->id->stype = IdExpression::CONSTRUCTOR;
+
+            auto e = MkNode<FunctionDeclarator>();
+            e->retType = std::move(i);
+            e->params = $3;
+
             $$ = MkNode<FunctionDefinition>();
-            $$->declarator = $1;
-            $$->ctorInitList = $2;
-            $$->funcBody = $3;
+            $$->declarator = std::move(e);
+            $$->ctorInitList = $5;
+            $$->funcBody = $6;
         }
 |   decl_specifier_seq declarator function_body
         {
@@ -1361,7 +1421,7 @@ initializer_list:
 
 class_specifier:
     class_head '{' 
-        { pc.EnterScope(); } 
+        { pc.EnterLastAddedName(); } 
     member_specification '}'
         { 
             $$ = $1;
@@ -1379,26 +1439,24 @@ class_head:
             $$->key = $1;
             $$->baseSpec = $2;
         }
-|   class_key COLONCOLON_opt identifier base_clause_opt
+|   class_key identifier base_clause_opt
         {
             $$ = MkNode<ClassSpecifier>();
             $$->key = $1;
-            $$->nameSpec = MkNode<NameSpecifier>($2);
+            $$->identifier = $2;
+            $$->baseSpec = $3;
+
+            if (!pc.AddName($$->identifier, ParseContext::CLASS))
+                throw syntax_error(@3, "redeclear of identifier " + $$->identifier);
+        }
+|   class_key nested_name_specifier class_name base_clause_opt
+        {
+            $$ = MkNode<ClassSpecifier>();
+            $$->key = $1;
+            $$->nameSpec = $2;
             $$->identifier = $3;
             $$->baseSpec = $4;
-
-            pc.AddName($$->identifier, ParseContext::CLASS);
-        }
-|   class_key COLONCOLON_opt nested_name_specifier identifier base_clause_opt
-        {
-            $$ = MkNode<ClassSpecifier>();
-            $$->key = $1;
-            $$->nameSpec = $3;
-            $$->nameSpec->isGlobal = $2;
-            $$->identifier = $4;
-            $$->baseSpec = $5;
-
-            pc.AddName($$->identifier, ParseContext::CLASS);
+            pc.PopQueryScopes();
         }
 ;
 
@@ -1412,24 +1470,28 @@ base_clause_opt:                { $$ = nullptr; }
 ;
 
 forward_class_specifier:
-    class_key COLONCOLON_opt identifier
+    class_key identifier
         {
             $$ = MkNode<ElaboratedTypeSpecifier>();  
             $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
-            $$->typeName = $3;
-            $$->nameSpec = MkNode<NameSpecifier>($2);
+            $$->typeName = $2;
 
-            pc.AddName($$->typeName, ParseContext::CLASS);
+            if (!pc.AddName($$->typeName, ParseContext::CLASS))
+                throw syntax_error(@2, "redeclear of classname " + $$->typeName);
         }
-|   class_key COLONCOLON_opt nested_name_specifier identifier
+|   class_key class_name
+        { 
+            $$ = MkNode<ElaboratedTypeSpecifier>();
+            $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
+            $$->typeName = $2;
+        }
+|   class_key nested_name_specifier class_name
         { 
             $$ = MkNode<ElaboratedTypeSpecifier>();  
             $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
-            $$->typeName = $4;
-            $$->nameSpec = $3;
-            $$->nameSpec->isGlobal = $2;
-
-            pc.AddName($$->typeName, ParseContext::CLASS);
+            $$->typeName = $3;
+            $$->nameSpec = $2;
+            pc.PopQueryScopes();
         }
 ;
     
@@ -1440,7 +1502,7 @@ member_specification:
 |   access_specifier ':' member_specification
         { $$ = $3; $$->MoveDefaultTo($1); }
 |   error member_specification
-        { $$ = $2; }
+        { $$ = $2; pc.PopQueryScopes(); }
 ;
 
 member_declaration:
@@ -1449,6 +1511,40 @@ member_declaration:
             auto e = MkNode<MemberDefinition>();
             e->declSpec = $1;
             e->decls = $2;
+            $$ = std::move(e);
+        }
+|   member_declarator ';'
+        {
+            auto e = MkNode<MemberDefinition>();
+            e->decls.push_back($1);
+            $$ = std::move(e);
+        }
+|   decl_specifier_seq '(' parameter_declaration_list ')' ';'
+        {
+            auto decl = $1;
+            if (typeid(*decl->typeSpec) != typeid(ElaboratedTypeSpecifier))
+                throw syntax_error(@1, "expect member name or ';' here");
+
+            auto edecl = static_cast<ElaboratedTypeSpecifier*>(decl->typeSpec.get());
+            if (edecl->typeClass != ElaboratedTypeSpecifier::CLASSNAME
+                || edecl->typeName != pc.CurLocalScopeName())
+                throw syntax_error(@1, "expect member name or ';' here");
+
+            auto i = MkNode<IdDeclarator>();
+            i->id = MkNode<IdExpression>();
+            i->id->identifier = edecl->typeName;
+            i->id->stype = IdExpression::CONSTRUCTOR;
+
+            auto f = MkNode<FunctionDeclarator>();
+            f->retType = std::move(i);
+            f->params = $3;
+
+            auto d = MkNode<MemberDeclarator>();
+            d->decl = std::move(f);
+
+            auto e = MkNode<MemberDefinition>();
+            e->decls.push_back(std::move(d));
+
             $$ = std::move(e);
         }
 |   function_definition COMMA_opt
@@ -1495,39 +1591,40 @@ constant_initializer:
  * ------------------------------------------------------------------------- */
 
 base_clause:
-    ':' base_specifier          { $$ = $2; }
+    ':' 
+        { pc.PopQueryScopes(); }
+    base_specifier          
+        { $$ = $3; }
 ;
 
 base_specifier:
-    COLONCOLON_opt class_name
+    class_name
         {
             $$ = MkNode<BaseSpecifier>();
             $$->access = Access::DEFAULT;
-            $$->nameSpec = MkNode<NameSpecifier>($1);
+            $$->className = $1;
+        }
+|   nested_name_specifier class_name
+        {
+            $$ = MkNode<BaseSpecifier>();
+            $$->access = Access::DEFAULT;
+            $$->nameSpec = $1;
+            $$->className = $2;
+            pc.PopQueryScopes();
+        }
+|   access_specifier class_name
+        {
+            $$ = MkNode<BaseSpecifier>();
+            $$->access = $1;
             $$->className = $2;
         }
-|   COLONCOLON_opt nested_name_specifier class_name
+|   access_specifier nested_name_specifier class_name
         {
             $$ = MkNode<BaseSpecifier>();
-            $$->access = Access::DEFAULT;
+            $$->access = $1;
             $$->nameSpec = $2;
-            $$->nameSpec->isGlobal = $1;
             $$->className = $3;
-        }
-|   access_specifier COLONCOLON_opt class_name
-        {
-            $$ = MkNode<BaseSpecifier>();
-            $$->access = $1;
-            $$->nameSpec = MkNode<NameSpecifier>($2);
-            $$->className = $3;
-        }
-|   access_specifier COLONCOLON_opt nested_name_specifier class_name
-        {
-            $$ = MkNode<BaseSpecifier>();
-            $$->access = $1;
-            $$->nameSpec = $3;
-            $$->nameSpec->isGlobal = $2;
-            $$->className = $4;
+            pc.PopQueryScopes();
         }
 ;
 
@@ -1575,20 +1672,19 @@ mem_initializer:
 ;
 
 mem_initializer_id:
-    COLONCOLON_opt class_name
+    class_name
         {
             $$ = MkNode<CtorMemberInitializer>();
-            $$->nameSpec = MkNode<NameSpecifier>($1);
-            $$->identifier = $2;
+            $$->identifier = $1;
             $$->isBaseCtor = true;
         }
-|   COLONCOLON_opt nested_name_specifier class_name
+|   nested_name_specifier class_name
         {
             $$ = MkNode<CtorMemberInitializer>();
-            $$->nameSpec = $2;
-            $$->nameSpec->isGlobal = $1;
-            $$->identifier = $3;
+            $$->nameSpec = $1;
+            $$->identifier = $2;
             $$->isBaseCtor = true;
+            pc.PopQueryScopes();
         }
 |   identifier
         {
@@ -1652,11 +1748,7 @@ operator:
  * A. Optional epsilon definition
  * ------------------------------------------------------------------------- */
 
-COLONCOLON_opt:                 { $$ = false; }
-|   "::"                        { $$ = true; }
-;
-
-COMMA_opt: | ',';
+COMMA_opt: | ';';
 
 expression_list_opt:            { $$ = nullptr; }
 |   expression_list             { $$ = $1; }
@@ -1710,6 +1802,9 @@ conversion_declarator_opt:      { $$ = nullptr; }
 |   conversion_declarator       { $$ = $1; }
 ;
 
+ctor_initializer_opt:           {}
+|   ctor_initializer            { $$ = $1; }
+;
 
 %%
 

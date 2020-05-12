@@ -155,7 +155,8 @@ void ElaboratedTypeSpecifier::Print(std::ostream &os, Indent indent) const
     }
 
     os << ' ' << typeName << (cv == CVQualifier::CONST ? " (const)\n" : "\n");
-    nameSpec->Print(os, indent + 1);
+    if (nameSpec)
+        nameSpec->Print(os, indent + 1);
 }
 
 void ClassTypeSpecifier::Print(std::ostream &os, Indent indent) const

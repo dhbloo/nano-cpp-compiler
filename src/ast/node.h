@@ -27,6 +27,7 @@ struct BinaryExpression;
 struct CastExpression;
 struct UnaryExpression;
 struct CallExpression;
+struct ConstructExpression;
 struct SizeofExpression;
 struct NewExpression;
 struct PlainNew;
@@ -184,8 +185,6 @@ struct NameSpecifier : Node
     std::vector<std::string> path;
     bool                     isGlobal;
 
-    NameSpecifier(bool isGlobal = false) : isGlobal(isGlobal) {}
-
     void Print(std::ostream &os, Indent indent) const override;
 };
 
@@ -249,6 +248,14 @@ struct CallExpression : Expression
     void Print(std::ostream &os, Indent indent) const override;
 };
 
+struct ConstructExpression : Expression
+{
+    Ptr<ElaboratedTypeSpecifier> type;
+    Ptr<ExpressionList>          params;  // opt
+
+    void Print(std::ostream &os, Indent indent) const override;
+};
+
 struct SizeofExpression : Expression
 {
     Ptr<TypeId> typeId;
@@ -290,9 +297,11 @@ struct DeleteExpression : Expression
 
 struct IdExpression : Expression
 {
+    enum SpecialType { NO, DESTRUCTOR, CONSTRUCTOR };
+
     Ptr<NameSpecifier> nameSpec;  // opt
     std::string        identifier;
-    bool               isDestructor;
+    SpecialType        stype;
 
     void Print(std::ostream &os, Indent indent) const override;
 };
@@ -505,7 +514,7 @@ struct ElaboratedTypeSpecifier : TypeSpecifier
 {
     enum TypeClass { CLASSNAME, ENUMNAME, TYPEDEFNAME };
     TypeClass          typeClass;
-    Ptr<NameSpecifier> nameSpec;
+    Ptr<NameSpecifier> nameSpec;  // opt
     std::string        typeName;
 
     bool operator==(const ElaboratedTypeSpecifier &other);
@@ -657,7 +666,7 @@ struct ClassSpecifier : Node
     enum Key { CLASS, STRUCT };
 
     Key                key;
-    Ptr<NameSpecifier> nameSpec;
+    Ptr<NameSpecifier> nameSpec;    // opt
     std::string        identifier;  // opt
     Ptr<BaseSpecifier> baseSpec;    // opt
 
@@ -682,7 +691,7 @@ struct MemberDeclaration : Node
 
 struct MemberDefinition : MemberDeclaration
 {
-    Ptr<DeclSpecifier>       declSpec;
+    Ptr<DeclSpecifier>       declSpec;  // opt
     PtrVec<MemberDeclarator> decls;
 
     void Print(std::ostream &os, Indent indent) const override;
@@ -709,7 +718,7 @@ struct MemberFunction : MemberDeclaration
 struct BaseSpecifier : Node
 {
     Access             access;
-    Ptr<NameSpecifier> nameSpec;
+    Ptr<NameSpecifier> nameSpec;  // opt
     std::string        className;
 
     void Print(std::ostream &os, Indent indent) const override;
@@ -729,7 +738,7 @@ struct ConversionFunctionId : IdExpression
 
 struct CtorMemberInitializer : Node
 {
-    Ptr<NameSpecifier>  nameSpec;
+    Ptr<NameSpecifier>  nameSpec;  // opt
     std::string         identifier;
     Ptr<ExpressionList> exprList;  // opt
     bool                isBaseCtor;

@@ -86,6 +86,17 @@ void CallExpression::Print(std::ostream &os, Indent indent) const
     }
 }
 
+void ConstructExpression::Print(std::ostream &os, Indent indent) const
+{
+    os << indent << "类型构造表达式:\n";
+    os << indent + 1 << "类型:\n";
+    type->Print(os, indent + 2);
+    if (params) {
+        os << indent + 1 << "构造参数:\n";
+        params->Print(os, indent + 2);
+    }
+}
+
 void SizeofExpression::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "Sizeof表达式:\n";
@@ -137,7 +148,14 @@ void DeleteExpression::Print(std::ostream &os, Indent indent) const
 
 void IdExpression::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "Id表达式: " << identifier << (isDestructor ? " (析构函数)\n" : "\n");
+    os << indent << "Id表达式: " << identifier;
+
+    switch (stype) {
+    case DESTRUCTOR: os << " (析构函数)\n"; break;
+    case CONSTRUCTOR: os << " (构造函数)\n"; break;
+    default: os << '\n'; break;
+    }
+
     if (nameSpec)
         nameSpec->Print(os, indent + 1);
 }

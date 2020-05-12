@@ -28,7 +28,7 @@ void Declarator::Print(std::ostream &os, Indent indent) const
 void FunctionDeclarator::Print(std::ostream &os, Indent indent) const
 {
     Declarator::Print(os, indent);
-    os << indent << "函数: ";
+    os << indent << "函数原型: ";
     if (isFuncConst)
         os << "(成员const) ";
     if (params.empty())

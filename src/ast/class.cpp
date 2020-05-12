@@ -48,7 +48,8 @@ void ClassSpecifier::Print(std::ostream &os, Indent indent) const
     os << indent << "类定义: " << (key == CLASS ? "class" : "struct") << ", 名称: " << identifier
        << (members->MemberCount() ? "\n" : " (空类)\n");
 
-    nameSpec->Print(os, indent);
+    if (nameSpec)
+        nameSpec->Print(os, indent);
 
     if (baseSpec)
         baseSpec->Print(os, indent);
@@ -78,7 +79,9 @@ void MemberList::Print(std::ostream &os, Indent indent) const
 void MemberDefinition::Print(std::ostream &os, Indent indent) const
 {
     os << "成员定义\n";
-    declSpec->Print(os, indent + 1);
+    if (declSpec)
+        declSpec->Print(os, indent + 1);
+
     for (std::size_t i = 0; i < decls.size(); i++) {
         os << indent + 1 << "定义[" << i << "]:" << (decls[i]->isPure ? " (纯虚函数)\n" : "\n");
         decls[i]->decl->Print(os, indent + 2);
@@ -105,7 +108,8 @@ void BaseSpecifier::Print(std::ostream &os, Indent indent) const
     default: os << "(默认继承)";
     }
     os << '\n';
-    nameSpec->Print(os, indent + 1);
+    if (nameSpec)
+        nameSpec->Print(os, indent + 1);
 }
 
 void ConversionFunctionId::Print(std::ostream &os, Indent indent) const
@@ -119,7 +123,8 @@ void ConversionFunctionId::Print(std::ostream &os, Indent indent) const
 void CtorMemberInitializer::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "成员: " << identifier << (isBaseCtor ? " (基类构造)\n" : "\n");
-    nameSpec->Print(os, indent + 1);
+    if (nameSpec)
+        nameSpec->Print(os, indent + 1);
     if (exprList)
         exprList->Print(os, indent + 1);
 }

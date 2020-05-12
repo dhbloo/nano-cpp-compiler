@@ -178,6 +178,7 @@ nested-name-specifier:
 
 postfix-expression:
     primary-expression
+    simple-typename-specifier '{' [expression-list] '}'
     postfix-expression '[' expression ]
     postfix-expression '(' [expression-list] ')'
     postfix-expression '.' id-expression
@@ -208,8 +209,8 @@ unary-operator:
     '--'
     
 new-expression:
-	['::'] 'new' [new-placement] new-type-id [new-initializer]
-	['::'] 'new' [new-placement] '(' type-id ')' [new-initializer]
+	'new' [new-placement] new-type-id [new-initializer]
+	'new' [new-placement] '(' type-id ')' [new-initializer]
 
 new-placement:
 	'(' expression-list ')'
@@ -229,8 +230,8 @@ new-initializer:
 	'(' [expression-list] ')'
 
 delete-expression:
-	['::'] 'delete' cast-expression
-	['::'] 'delete' '[' ']' cast-expression
+	'delete' cast-expression
+	'delete' '[' ']' cast-expression
 
 cast-expression:
 	unary-expression
@@ -318,7 +319,7 @@ constant-expression:
 	conditional-expression
 ```
 
-注：`assignment-operator`为右结合。
+注：`assignment-operator`为右结合。在表达式中构造临时对象采用C++11中的{}构造表示。
 
 ### 4. 语句
 
@@ -425,10 +426,13 @@ type-name:
     enum-name
     typedef-name
     
+simple-typename-specifier:
+	[nested-name-specifier] type-name
+    
 elaborated-type-specifier:
-	['::'] [nested-name-specifier] type-name
-    class-key ['::'] [nested-name-specifier] identifier
-    'enum' ['::'] [nested-name-specifier] identifier
+	simple-typename-specifier
+    class-key [nested-name-specifier] identifier
+    'enum' [nested-name-specifier] identifier
     
 enum-specifier:
 	'enum' [identifier] '{' [enumerator-list] '}'
@@ -472,7 +476,7 @@ ptr-operator-list:
 ptr-operator:
     '*' [cv-qualifier]
     '&'
-    ['::'] nested-name-specifier '*' [cv-qualifier]
+    nested-name-specifier '*' [cv-qualifier]
     
 cv-qualifier:
 	'const'
@@ -545,6 +549,7 @@ member-specification:
 
 member-declaration:
     decl-specifier-seq [member-declarator-list] ';'
+    member-declarator ';'
     function-definition [';']
 
 member-declarator-list:
