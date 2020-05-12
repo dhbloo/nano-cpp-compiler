@@ -4,6 +4,11 @@ namespace ast {
 
 SyntaxStatus Combine(Ptr<DeclSpecifier> n1, Ptr<DeclSpecifier> n2, Ptr<DeclSpecifier> &out)
 {
+    if (n1->isStatic && n2->isStatic)
+        return "duplicate static specifier";
+    else
+        n1->isStatic = n1->isStatic || n2->isStatic;
+
     if (n1->isFriend && n2->isFriend)
         return "duplicate friend specifier";
     else
@@ -95,8 +100,10 @@ void BlockDeclaration::Print(std::ostream &os, Indent indent) const
 
 void DeclSpecifier::Print(std::ostream &os, Indent indent) const
 {
-    if (isFriend || isVirtual || isTypedef) {
+    if (isFriend || isVirtual || isTypedef || isStatic) {
         os << indent << "声明描述:";
+        if (isStatic)
+            os << " (static)";
         if (isFriend)
             os << " (friend)";
         if (isVirtual)
@@ -105,9 +112,10 @@ void DeclSpecifier::Print(std::ostream &os, Indent indent) const
             os << " (typedef)";
 
         os << "\n";
-        typeSpec->Print(os, indent + 1);
+        if (typeSpec)
+            typeSpec->Print(os, indent + 1);
     }
-    else {
+    else if (typeSpec) {
         typeSpec->Print(os, indent);
     }
 }
@@ -147,8 +155,7 @@ void ElaboratedTypeSpecifier::Print(std::ostream &os, Indent indent) const
     }
 
     os << ' ' << typeName << (cv == CVQualifier::CONST ? " (const)\n" : "\n");
-    if (nameSpec)
-        nameSpec->Print(os, indent + 1);
+    nameSpec->Print(os, indent + 1);
 }
 
 void ClassTypeSpecifier::Print(std::ostream &os, Indent indent) const

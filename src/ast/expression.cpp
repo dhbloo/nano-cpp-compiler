@@ -142,16 +142,6 @@ void IdExpression::Print(std::ostream &os, Indent indent) const
         nameSpec->Print(os, indent + 1);
 }
 
-void DestructorExpression::Print(std::ostream &os, Indent indent) const
-{
-    os << indent << "析构函数表达式:\n";
-    if (nameSpec)
-        nameSpec->Print(os, indent + 1);
-
-    os << indent + 1 << "类名:\n";
-    typeName->Print(os, indent + 2);
-}
-
 void ThisExpression::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "This表达式\n";
@@ -189,6 +179,19 @@ void ExpressionList::Print(std::ostream &os, Indent indent) const
         os << indent + 1 << "表达式[" << i << "]:\n";
         exprList[i]->Print(os, indent + 2);
     }
+}
+
+void OperatorFunctionId::Print(std::ostream &os, Indent indent) const
+{
+    const char *OP_NAME[] = {
+        "ADD",     "SUB",     "MUL",       "DIV",     "MOD",    "XOR",      "AND",     "OR",
+        "NOT",     "LOGINOT", "ASSIGN",    "LT",      "GT",     "SELFADD",  "SELFSUB", "SELFMUL",
+        "SELFDIV", "SELFMOD", "SELFXOR",   "SELFAND", "SELFOR", "SHL",      "SHR",     "SELFSHL",
+        "SELFSHR", "EQ",      "NE",        "LE",      "GE",     "LOGIAND",  "LOGIOR",  "SELFINC",
+        "SELFDEC", "COMMA",   "ARROWSTAR", "ARROW",   "CALL",   "SUBSCRIPT"};
+
+    os << indent << "运算符函数Id: " << OP_NAME[(int)overloadOp]
+       << (isGlobal ? " (global)\n" : "\n");
 }
 
 }  // namespace ast

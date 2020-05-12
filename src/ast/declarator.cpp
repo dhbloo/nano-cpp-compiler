@@ -14,7 +14,7 @@ void PtrSpecifier::Print(std::ostream &os, Indent indent) const
         }
         os << (ptrList[i].isPtrConst ? " (const)\n" : "\n");
 
-        if (ptrList[i].classNameSpec)
+        if (ptrList[i].ptrType == CLASSPTR)
             ptrList[i].classNameSpec->Print(os, indent + 2);
     }
 }

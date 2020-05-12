@@ -33,6 +33,7 @@
 %define parse.error verbose
 
 %parse-param { ast::Ptr<ast::TranslationUnit>& astRoot }
+%parse-param { int& errcnt }
 %param { ParseContext pc }
 
 
@@ -103,14 +104,13 @@
 %type<ast::Ptr<ast::Expression>> logical_or_expression conditional_expression assignment_expression assignment_expression_opt
 %type<ast::Ptr<ast::Expression>> expression expression_opt condition condition_opt constant_initializer 
 %type<ast::Ptr<ast::IdExpression>> id_expression unqualified_id qualified_id
-%type<ast::Ptr<ast::DestructorExpression>> pseudo_destructor_name
 %type<ast::Ptr<ast::NewExpression>> new_expression
 %type<ast::Ptr<ast::DeleteExpression>> delete_expression
 %type<ast::Ptr<ast::ExpressionList>> expression_list expression_list_opt
 %type<ast::Ptr<ast::ExpressionList>> new_placememt new_placememt_opt new_initializer new_initializer_opt
 %type<ast::Ptr<ast::InitializableNew>> new_type_id new_declarator
 %type<ast::PtrVec<ast::Expression>> direct_new_declarator
-%type<ast::Ptr<ast::NameSpecifier>> name_specifier name_specifier_opt nested_name_specifier
+%type<ast::Ptr<ast::NameSpecifier>> nested_name_specifier
 %type<AssignOp> assignment_operator
 %type<UnaryOp> unary_operator
 
@@ -126,7 +126,7 @@
 %type<ast::Ptr<ast::BlockDeclaration>> block_declaration simple_declaration
 %type<ast::Ptr<ast::DeclSpecifier>> decl_specifier_seq decl_specifier function_specifier
 %type<ast::Ptr<ast::TypeSpecifier>> type_specifier type_specifier_seq
-%type<ast::Ptr<ast::ElaboratedTypeSpecifier>> elaborated_type_specifier type_name type_name_COLONCOLON_opt
+%type<ast::Ptr<ast::ElaboratedTypeSpecifier>> elaborated_type_specifier forward_class_specifier type_name
 %type<ast::Ptr<ast::EnumSpecifier>> enum_specifier enumerator_list
 %type<ast::EnumSpecifier::Enumerator> enumerator_definition
 %type<FundTypePart> simple_type_specifier
@@ -256,8 +256,8 @@ id_expression:
 unqualified_id:
     identifier
         { 
-            $$ = MkNode<IdExpression>(); 
-            $$->identifier = $1; 
+            $$ = MkNode<IdExpression>();
+            $$->identifier = $1;
             pc.AddPossibleTypedefName($$->identifier);
         }
 |   operator_function_id
@@ -266,15 +266,15 @@ unqualified_id:
         { $$ = $1; }
 |   '~' class_name
         {
-            $$ = MkNode<IdExpression>(); 
+            $$ = MkNode<IdExpression>();
             $$->identifier = $2; 
             $$->isDestructor = true;
         }
 ;
 
 qualified_id:
-    name_specifier unqualified_id
-        { $$ = $2; $$->nameSpec = $1; }
+    COLONCOLON_opt nested_name_specifier unqualified_id
+        { $$ = $3; $$->nameSpec = $2; $$->nameSpec->isGlobal = $1; }
 |   "::" identifier
         {
             $$ = MkNode<IdExpression>(); 
@@ -284,13 +284,6 @@ qualified_id:
         }
 |   "::" operator_function_id
         { auto e = $2; e->isGlobal = true; $$ = std::move(e); }
-;
-
-name_specifier:
-    "::"
-        { $$ = MkNode<NameSpecifier>(); $$->isGlobal = true; }
-|   COLONCOLON nested_name_specifier
-        { $$ = $2; $$->isGlobal = true; }
 ;
 
 nested_name_specifier:
@@ -318,7 +311,7 @@ postfix_expression:
             e->params = $3;
             $$ = std::move(e);
         }
-|   postfix_expression '.' id_expression
+|   postfix_expression '.' unqualified_id
         {
             auto e = MkNode<BinaryExpression>();
             e->op = BinaryOp::DOT;
@@ -326,23 +319,18 @@ postfix_expression:
             e->right = $3;
             $$ = std::move(e);
         }
-|   postfix_expression "->" id_expression
-        {
-            auto e = MkNode<BinaryExpression>();
-            e->op = BinaryOp::ARROW;
-            e->left = $1;
-            e->right = $3;
-            $$ = std::move(e);
-        }
-|   postfix_expression '.' pseudo_destructor_name
+|   postfix_expression '.' COLONCOLON_opt nested_name_specifier unqualified_id
         {
             auto e = MkNode<BinaryExpression>();
             e->op = BinaryOp::DOT;
             e->left = $1;
-            e->right = $3;
+            auto r = $5;
+            r->nameSpec = $4;
+            r->nameSpec->isGlobal = $3;
+            e->right = std::move(r);
             $$ = std::move(e);
         }
-|   postfix_expression "->" pseudo_destructor_name
+|   postfix_expression "->" unqualified_id
         {
             auto e = MkNode<BinaryExpression>();
             e->op = BinaryOp::ARROW;
@@ -371,20 +359,6 @@ expression_list:
         { $$ = MkNode<ExpressionList>(); $$->exprList.push_back($1); }
 |   expression_list ',' assignment_expression
         { $$ = $1; $$->exprList.push_back($3); }
-;
-
-pseudo_destructor_name:
-    name_specifier_opt type_name_COLONCOLON_opt '~' type_name
-        {
-            $$ = MkNode<DestructorExpression>(); 
-            $$->typeName = $4;
-            $$->nameSpec = $1; 
-            
-            auto optName = $2;
-            if (optName && !(*($$->typeName) == *optName)) {
-                throw syntax_error(@2, "no destructor under this typename");
-            }
-        }
 ;
 
 unary_expression:
@@ -421,8 +395,8 @@ unary_operator:
 |   '&'                         { $$ = UnaryOp::ADDRESSOF; }
 |   '+'                         { $$ = UnaryOp::POSI; }
 |   '-'                         { $$ = UnaryOp::NEG; }
-|   '!'                         { $$ = UnaryOp::LOGINOT; }
 |   '~'                         { $$ = UnaryOp::NOT; }
+|   '!'                         { $$ = UnaryOp::LOGINOT; }
 |   "++"                        { $$ = UnaryOp::PREINC; }
 |   "--"                        { $$ = UnaryOp::PREDEC; }
 ;
@@ -836,6 +810,10 @@ statement_seq:
         { $$ = MkNode<CompoundStatement>(); $$->stmts.push_back($1); }
 |   statement_seq statement
         { $$ = $1; $$->stmts.push_back($2); }
+|   error ';'
+        {}
+|   statement_seq error ';'
+        { $$ = $1; }
 ;
 
 selection_statement:
@@ -927,10 +905,18 @@ declaration_statement:
  * ------------------------------------------------------------------------- */
 
 declaration_seq:
-    declaration             
+    declaration
         { $$.push_back($1); }
 |   declaration_seq declaration
         { $$ = $1; $$.push_back($2); }
+|   error
+        {}
+|   error ';'
+        { yyclearin; yyerrok; }
+|   declaration_seq error
+        { $$ = $1; }
+|   declaration_seq error ';'
+        { $$ = $1; yyclearin; yyerrok; }
 ;
     
 declaration:
@@ -963,6 +949,8 @@ decl_specifier:
         { $$ = MkNode<DeclSpecifier>(); $$->typeSpec = $1; }
 |   function_specifier          
         { $$ = $1; }
+|   STATIC
+        { $$ = MkNode<DeclSpecifier>(); $$->isStatic = true; }
 |   FRIEND
         { $$ = MkNode<DeclSpecifier>(); $$->isFriend = true; }
 |   TYPEDEF
@@ -1054,21 +1042,41 @@ type_name:
 ;
     
 elaborated_type_specifier:
-    name_specifier_opt type_name
-        { $$ = $2; $$->nameSpec = $1; }
-|   class_key name_specifier_opt class_name
+    COLONCOLON_opt type_name
+        { $$ = $2; $$->nameSpec = MkNode<NameSpecifier>($1); }
+|   COLONCOLON_opt nested_name_specifier type_name
+        { $$ = $3; $$->nameSpec = $2; $$->nameSpec->isGlobal = $1; }
+|   class_key COLONCOLON_opt class_name
+        { 
+            $$ = MkNode<ElaboratedTypeSpecifier>();
+            $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
+            $$->typeName = $3;
+            $$->nameSpec = MkNode<NameSpecifier>($2);
+        }
+|   class_key COLONCOLON_opt nested_name_specifier class_name
         { 
             $$ = MkNode<ElaboratedTypeSpecifier>();  
             $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
-            $$->typeName = $3;
-            $$->nameSpec = $2;
+            $$->typeName = $4;
+            $$->nameSpec = $3;
+            $$->nameSpec->isGlobal = $2;
         }
-|   ENUM name_specifier_opt enum_name
+|   forward_class_specifier
+        { $$ = $1; }
+|   ENUM COLONCOLON_opt enum_name
         { 
             $$ = MkNode<ElaboratedTypeSpecifier>();  
             $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
             $$->typeName = $3;
-            $$->nameSpec = $2;
+            $$->nameSpec = MkNode<NameSpecifier>($2);
+        }
+|   ENUM COLONCOLON_opt nested_name_specifier enum_name
+        { 
+            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
+            $$->typeName = $4;
+            $$->nameSpec = $3;
+            $$->nameSpec->isGlobal = $2;
         }
 ;
     
@@ -1168,8 +1176,8 @@ direct_declarator:
 ptr_operator_list:
     ptr_operator
         { $$ = MkNode<PtrSpecifier>(); $$->ptrList.push_back($1); }
-|   ptr_operator ptr_operator_list
-        { $$ = $2; $$->ptrList.push_back($1); }
+|   ptr_operator_list ptr_operator
+        { $$ = $1; $$->ptrList.push_back($2); }
 ;
 
 ptr_operator:
@@ -1180,11 +1188,12 @@ ptr_operator:
         }
 |   '&'
         { $$.ptrType = PtrSpecifier::REF; }
-|   name_specifier '*' cv_qualifier_opt
+|   COLONCOLON_opt nested_name_specifier '*' cv_qualifier_opt
         {
             $$.ptrType = PtrSpecifier::CLASSPTR; 
-            $$.isPtrConst = $3;
-            $$.classNameSpec = $1;
+            $$.isPtrConst = $4;
+            $$.classNameSpec = $2;
+            $$.classNameSpec->isGlobal = $1;
         }
 ;
     
@@ -1355,8 +1364,10 @@ class_specifier:
         { pc.EnterScope(); } 
     member_specification '}'
         { 
-            $$ = $1; 
+            $$ = $1;
             $$->members = $4;
+            $$->MoveDefaultMember();
+            $$->members->Reverse();
             pc.LeaveScope();
         }
 ;
@@ -1368,13 +1379,24 @@ class_head:
             $$->key = $1;
             $$->baseSpec = $2;
         }
-|   class_key name_specifier_opt identifier base_clause_opt
+|   class_key COLONCOLON_opt identifier base_clause_opt
         {
             $$ = MkNode<ClassSpecifier>();
             $$->key = $1;
-            $$->nameSpec = $2;
+            $$->nameSpec = MkNode<NameSpecifier>($2);
             $$->identifier = $3;
             $$->baseSpec = $4;
+
+            pc.AddName($$->identifier, ParseContext::CLASS);
+        }
+|   class_key COLONCOLON_opt nested_name_specifier identifier base_clause_opt
+        {
+            $$ = MkNode<ClassSpecifier>();
+            $$->key = $1;
+            $$->nameSpec = $3;
+            $$->nameSpec->isGlobal = $2;
+            $$->identifier = $4;
+            $$->baseSpec = $5;
 
             pc.AddName($$->identifier, ParseContext::CLASS);
         }
@@ -1384,6 +1406,32 @@ class_key:
     CLASS                       { $$ = ClassSpecifier::CLASS; }
 |   STRUCT                      { $$ = ClassSpecifier::STRUCT; }
 ;
+
+base_clause_opt:                { $$ = nullptr; }
+|   base_clause                 { $$ = $1; }
+;
+
+forward_class_specifier:
+    class_key COLONCOLON_opt identifier
+        {
+            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
+            $$->typeName = $3;
+            $$->nameSpec = MkNode<NameSpecifier>($2);
+
+            pc.AddName($$->typeName, ParseContext::CLASS);
+        }
+|   class_key COLONCOLON_opt nested_name_specifier identifier
+        { 
+            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
+            $$->typeName = $4;
+            $$->nameSpec = $3;
+            $$->nameSpec->isGlobal = $2;
+
+            pc.AddName($$->typeName, ParseContext::CLASS);
+        }
+;
     
 member_specification:
         { $$ = MkNode<MemberList>(); }
@@ -1391,6 +1439,8 @@ member_specification:
         { $$ = $2; $$->defaultMember.push_back($1); }
 |   access_specifier ':' member_specification
         { $$ = $3; $$->MoveDefaultTo($1); }
+|   error member_specification
+        { $$ = $2; }
 ;
 
 member_declaration:
@@ -1449,19 +1499,35 @@ base_clause:
 ;
 
 base_specifier:
-    name_specifier_opt class_name
+    COLONCOLON_opt class_name
         {
             $$ = MkNode<BaseSpecifier>();
             $$->access = Access::DEFAULT;
-            $$->nameSpec = $1;
+            $$->nameSpec = MkNode<NameSpecifier>($1);
             $$->className = $2;
         }
-|   access_specifier name_specifier_opt class_name
+|   COLONCOLON_opt nested_name_specifier class_name
+        {
+            $$ = MkNode<BaseSpecifier>();
+            $$->access = Access::DEFAULT;
+            $$->nameSpec = $2;
+            $$->nameSpec->isGlobal = $1;
+            $$->className = $3;
+        }
+|   access_specifier COLONCOLON_opt class_name
         {
             $$ = MkNode<BaseSpecifier>();
             $$->access = $1;
-            $$->nameSpec = $2;
+            $$->nameSpec = MkNode<NameSpecifier>($2);
             $$->className = $3;
+        }
+|   access_specifier COLONCOLON_opt nested_name_specifier class_name
+        {
+            $$ = MkNode<BaseSpecifier>();
+            $$->access = $1;
+            $$->nameSpec = $3;
+            $$->nameSpec->isGlobal = $2;
+            $$->className = $4;
         }
 ;
 
@@ -1509,11 +1575,19 @@ mem_initializer:
 ;
 
 mem_initializer_id:
-    name_specifier_opt class_name
+    COLONCOLON_opt class_name
         {
             $$ = MkNode<CtorMemberInitializer>();
-            $$->nameSpec = $1;
+            $$->nameSpec = MkNode<NameSpecifier>($1);
             $$->identifier = $2;
+            $$->isBaseCtor = true;
+        }
+|   COLONCOLON_opt nested_name_specifier class_name
+        {
+            $$ = MkNode<CtorMemberInitializer>();
+            $$->nameSpec = $2;
+            $$->nameSpec->isGlobal = $1;
+            $$->identifier = $3;
             $$->isBaseCtor = true;
         }
 |   identifier
@@ -1588,14 +1662,6 @@ expression_list_opt:            { $$ = nullptr; }
 |   expression_list             { $$ = $1; }
 ;
 
-name_specifier_opt:             { $$ = nullptr; }
-|   name_specifier              { $$ = $1; }
-;
-
-type_name_COLONCOLON_opt:       { $$ = nullptr; }
-| type_name "::"                { $$ = $1; }
-;
-
 new_placememt_opt:              { $$ = nullptr; }
 |   new_placememt               { $$ = $1; }
 ;
@@ -1636,10 +1702,6 @@ assignment_expression_opt:      { $$ = nullptr; }
 |   '=' assignment_expression   { $$ = $2; }
 ;
 
-base_clause_opt:                { $$ = nullptr; }
-|   base_clause                 { $$ = $1; }
-;
-
 pure_specifier_opt:             { $$ = false; }
 |   pure_specifier              { $$ = true; }
 ;
@@ -1655,6 +1717,7 @@ namespace yy {
 
 void parser::error(const location_type& l, const std::string& msg) {
     std::cerr << msg << " at location " << l << '\n';
+    errcnt++;
 }
 
 }

@@ -3,6 +3,9 @@ struct A
     int   x, y;
     float z;
 
+    A();
+    virtual ~A();
+
     void print() const;
     int  ret(int a, int b) { return x + y + a + b; }
 
@@ -19,13 +22,19 @@ struct A
 };
 
 class B : public A
-{};
-
-const class C : private B
 {
+public:
+    class D {
+        int a;
+    };
 private:
-    const A *a;
-    int      x;
+    D d;
+};
+
+const class C : private ::B
+{
+    float  z;
+    double w;
 
 public:
     /*C(const A* pa, int px) : a(pa) {
@@ -33,6 +42,10 @@ public:
     }*/
     ~C() { x = 0; }
     const B &get_b() const { return (const B &)*this; }
+
+private:
+    const A *a;
+    int      x;
 };
 
 A a, *pa, **ppa;

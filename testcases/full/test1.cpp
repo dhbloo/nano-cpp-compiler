@@ -4,13 +4,14 @@
 // 测试者：CS1702班 U201714568 王霖
 // 已将不能实现的部分注释，或在其下方写下可以实现的功能
 
-//#include "stdafx.h"
+#include "stdafx.h"
 
 int a, b, c;
-//int 1x;
-//int x+1;
+int 1x;
+int x+1;
 int x=3+a;
 char cChar;
+#include "asdf.h"
 float m, n;
 double cArray[100];
 int b[10][10];
@@ -68,7 +69,7 @@ int _tmain(int argc, char argv[])
         cChar='\n'; 
         cChar = 1;
 	g = *(&(d[0][0]));
-	i = 1;
+	i = int 1;
 	while (i <= m)
 	{
 		n = fibo(i);

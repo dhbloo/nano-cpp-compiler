@@ -1,7 +1,7 @@
 #include "yyparser.h"
 
-#include <iostream>
 #include <cstring>
+#include <iostream>
 
 int main(int argc, char *argv[])
 {
@@ -13,12 +13,14 @@ int main(int argc, char *argv[])
 
     for (;;) {
         ast::Ptr<ast::TranslationUnit> root;
-        yy::parser parser(root, {});
+        int                            errcnt = 0;
+        yy::parser                     parser(root, errcnt, {});
         parser.set_debug_level(debug);
 
-        if (parser() != 0) {
+        if (parser() != 0 || errcnt > 0) {
             std::cerr << "Parsing failed!\n\n";
-        } else {
+        }
+        else {
             root->Print(std::cout);
         }
 

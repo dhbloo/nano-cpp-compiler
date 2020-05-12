@@ -59,7 +59,7 @@ void SwitchStatement::Print(std::ostream &os, Indent indent) const
 
 void WhileStatement::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "White语句:\n";
+    os << indent << "While语句:\n";
     os << indent + 1 << "条件:\n";
     condition->Print(os, indent + 2);
     os << indent + 1 << "语句:\n";
@@ -68,7 +68,7 @@ void WhileStatement::Print(std::ostream &os, Indent indent) const
 
 void DoStatement::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "Do-White语句:\n";
+    os << indent << "Do-While语句:\n";
     os << indent + 1 << "条件:\n";
     condition->Print(os, indent + 2);
     os << indent + 1 << "语句:\n";

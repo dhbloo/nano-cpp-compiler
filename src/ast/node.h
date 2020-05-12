@@ -184,6 +184,8 @@ struct NameSpecifier : Node
     std::vector<std::string> path;
     bool                     isGlobal;
 
+    NameSpecifier(bool isGlobal = false) : isGlobal(isGlobal) {}
+
     void Print(std::ostream &os, Indent indent) const override;
 };
 
@@ -291,14 +293,6 @@ struct IdExpression : Expression
     Ptr<NameSpecifier> nameSpec;  // opt
     std::string        identifier;
     bool               isDestructor;
-
-    void Print(std::ostream &os, Indent indent) const override;
-};
-
-struct DestructorExpression : Expression
-{
-    Ptr<NameSpecifier>           nameSpec;  // opt
-    Ptr<ElaboratedTypeSpecifier> typeName;
 
     void Print(std::ostream &os, Indent indent) const override;
 };
@@ -480,8 +474,8 @@ struct BlockDeclaration : Declaration
 
 struct DeclSpecifier : Node
 {
-    bool               isFriend, isVirtual, isTypedef;
-    Ptr<TypeSpecifier> typeSpec;
+    bool               isStatic, isFriend, isVirtual, isTypedef;
+    Ptr<TypeSpecifier> typeSpec;  // opt for constructor/destructor/conversion
 
     friend SyntaxStatus
          Combine(Ptr<DeclSpecifier> n1, Ptr<DeclSpecifier> n2, Ptr<DeclSpecifier> &out);
@@ -511,7 +505,7 @@ struct ElaboratedTypeSpecifier : TypeSpecifier
 {
     enum TypeClass { CLASSNAME, ENUMNAME, TYPEDEFNAME };
     TypeClass          typeClass;
-    Ptr<NameSpecifier> nameSpec;  // opt
+    Ptr<NameSpecifier> nameSpec;
     std::string        typeName;
 
     bool operator==(const ElaboratedTypeSpecifier &other);
@@ -663,7 +657,7 @@ struct ClassSpecifier : Node
     enum Key { CLASS, STRUCT };
 
     Key                key;
-    Ptr<NameSpecifier> nameSpec;    // opt
+    Ptr<NameSpecifier> nameSpec;
     std::string        identifier;  // opt
     Ptr<BaseSpecifier> baseSpec;    // opt
 
@@ -677,8 +671,10 @@ struct MemberList : Node
 {
     PtrVec<MemberDeclaration> publicMember, protectedMember, privateMember, defaultMember;
 
-    void MoveDefaultTo(Access access);
-    void Print(std::ostream &os, Indent indent) const override;
+    std::size_t MemberCount() const;
+    void        Reverse();
+    void        MoveDefaultTo(Access access);
+    void        Print(std::ostream &os, Indent indent) const override;
 };
 
 struct MemberDeclaration : Node
@@ -713,7 +709,7 @@ struct MemberFunction : MemberDeclaration
 struct BaseSpecifier : Node
 {
     Access             access;
-    Ptr<NameSpecifier> nameSpec;  // opt
+    Ptr<NameSpecifier> nameSpec;
     std::string        className;
 
     void Print(std::ostream &os, Indent indent) const override;
@@ -733,7 +729,7 @@ struct ConversionFunctionId : IdExpression
 
 struct CtorMemberInitializer : Node
 {
-    Ptr<NameSpecifier>  nameSpec;  // opt
+    Ptr<NameSpecifier>  nameSpec;
     std::string         identifier;
     Ptr<ExpressionList> exprList;  // opt
     bool                isBaseCtor;

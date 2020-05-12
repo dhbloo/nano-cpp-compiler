@@ -1,11 +1,25 @@
 #include "node.h"
 
+#include <algorithm>
+
 namespace ast {
 
 void ClassSpecifier::MoveDefaultMember()
 {
     Access access = key == STRUCT ? Access::PUBLIC : Access::PRIVATE;
     members->MoveDefaultTo(access);
+}
+
+std::size_t MemberList::MemberCount() const
+{
+    return publicMember.size() + protectedMember.size() + privateMember.size();
+}
+
+void MemberList::Reverse()
+{
+    std::reverse(privateMember.begin(), privateMember.end());
+    std::reverse(protectedMember.begin(), protectedMember.end());
+    std::reverse(publicMember.begin(), publicMember.end());
 }
 
 void MemberList::MoveDefaultTo(Access access)
@@ -32,21 +46,21 @@ void MemberList::MoveDefaultTo(Access access)
 void ClassSpecifier::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "类定义: " << (key == CLASS ? "class" : "struct") << ", 名称: " << identifier
-       << (members ? "\n" : " (空类)\n");
+       << (members->MemberCount() ? "\n" : " (空类)\n");
 
-    if (nameSpec)
-        nameSpec->Print(os, indent);
+    nameSpec->Print(os, indent);
 
     if (baseSpec)
         baseSpec->Print(os, indent);
 
-    if (members)
+    if (members->MemberCount())
         members->Print(os, indent);
 }
 
 void MemberList::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "类成员列表:\n";
+
     for (std::size_t i = 0; i < publicMember.size(); i++) {
         os << indent + 1 << "公有成员[" << i << "]: ";
         publicMember[i]->Print(os, indent + 1);
@@ -59,10 +73,6 @@ void MemberList::Print(std::ostream &os, Indent indent) const
         os << indent + 1 << "私有成员[" << i << "]: ";
         privateMember[i]->Print(os, indent + 1);
     }
-    for (std::size_t i = 0; i < defaultMember.size(); i++) {
-        os << indent + 1 << "默认成员[" << i << "]: ";
-        defaultMember[i]->Print(os, indent + 1);
-    }
 }
 
 void MemberDefinition::Print(std::ostream &os, Indent indent) const
@@ -70,7 +80,7 @@ void MemberDefinition::Print(std::ostream &os, Indent indent) const
     os << "成员定义\n";
     declSpec->Print(os, indent + 1);
     for (std::size_t i = 0; i < decls.size(); i++) {
-        os << indent + 1 << "成员[" << i << "]:" << (decls[i]->isPure ? " (纯虚函数)\n" : "\n");
+        os << indent + 1 << "定义[" << i << "]:" << (decls[i]->isPure ? " (纯虚函数)\n" : "\n");
         decls[i]->decl->Print(os, indent + 2);
         if (decls[i]->constInit) {
             os << indent + 1 << "初始化:\n";
@@ -95,8 +105,7 @@ void BaseSpecifier::Print(std::ostream &os, Indent indent) const
     default: os << "(默认继承)";
     }
     os << '\n';
-    if (nameSpec)
-        nameSpec->Print(os, indent + 1);
+    nameSpec->Print(os, indent + 1);
 }
 
 void ConversionFunctionId::Print(std::ostream &os, Indent indent) const
@@ -110,23 +119,9 @@ void ConversionFunctionId::Print(std::ostream &os, Indent indent) const
 void CtorMemberInitializer::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "成员: " << identifier << (isBaseCtor ? " (基类构造)\n" : "\n");
-    if (nameSpec)
-        nameSpec->Print(os, indent + 1);
+    nameSpec->Print(os, indent + 1);
     if (exprList)
         exprList->Print(os, indent + 1);
-}
-
-void OperatorFunctionId::Print(std::ostream &os, Indent indent) const
-{
-    const char *OP_NAME[] = {
-        "ADD",     "SUB",     "MUL",       "DIV",     "MOD",    "XOR",      "AND",     "OR",
-        "NOT",     "LOGINOT", "ASSIGN",    "LT",      "GT",     "SELFADD",  "SELFSUB", "SELFMUL",
-        "SELFDIV", "SELFMOD", "SELFXOR",   "SELFAND", "SELFOR", "SHL",      "SHR",     "SELFSHL",
-        "SELFSHR", "EQ",      "NE",        "LE",      "GE",     "LOGIAND",  "LOGIOR",  "SELFINC",
-        "SELFDEC", "COMMA",   "ARROWSTAR", "ARROW",   "CALL",   "SUBSCRIPT"};
-
-    os << indent << "运算符函数Id: " << OP_NAME[(int)overloadOp]
-       << (isGlobal ? " (global)\n" : "\n");
 }
 
 }  // namespace ast

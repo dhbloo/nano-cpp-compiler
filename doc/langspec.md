@@ -168,13 +168,9 @@ unqualified-id:
     '~' class-name
 
 qualified-id:
-    name-specifier unqualified-id
+    ['::'] nested-name-specifier unqualified-id
     '::' identifier
     '::' operator-function-id
-    
-name-specifier:
-	'::'
-	['::'] nested-name-specifier
     
 nested-name-specifier:
 	class-name '::'
@@ -186,17 +182,12 @@ postfix-expression:
     postfix-expression '(' [expression-list] ')'
     postfix-expression '.' id-expression
     postfix-expression '->' id-expression
-    postfix-expression '.' pseudo-destructor-name
-    postfix-expression '->' pseudo-destructor-name
     postfix-expression '++'
     postfix-expression '--'
     
 expression-list:
     assignment-expression
     expression-list ',' assignment-expression
-
-pseudo-destructor-name:
-    [name-specifier] [type-name '::'] '~' type-name
 
 unary-expression:
     postfix-expression
@@ -435,9 +426,9 @@ type-name:
     typedef-name
     
 elaborated-type-specifier:
-	[name-specifier] type-name
-    class-key [name-specifier] identifier
-    'enum' [name-specifier] identifier
+	['::'] [nested-name-specifier] type-name
+    class-key ['::'] [nested-name-specifier] identifier
+    'enum' ['::'] [nested-name-specifier] identifier
     
 enum-specifier:
 	'enum' [identifier] '{' [enumerator-list] '}'
@@ -481,7 +472,7 @@ ptr-operator-list:
 ptr-operator:
     '*' [cv-qualifier]
     '&'
-    name-specifier '*' [cv-qualifier]
+    ['::'] nested-name-specifier '*' [cv-qualifier]
     
 cv-qualifier:
 	'const'
@@ -542,7 +533,7 @@ class-specifier:
 
 class-head:
     class-key [base-clause]
-    class-key [name-specifier] identifier [base-clause]
+    class-key ['::'] [nested-name-specifier] identifier [base-clause]
 
 class-key:
     'class'
@@ -578,8 +569,8 @@ base-clause:
 	':' base-specifier
 
 base-specifier:
-    [name-specifier] class-name
-    access-specifier [name-specifier] class-name
+    ['::'] [nested-name-specifier] class-name
+    access-specifier ['::'] [nested-name-specifier] class-name
 
 access-specifier:
     'private'
@@ -610,7 +601,7 @@ mem-initializer:
 	mem-initializer-id '(' [expression-list] ')'
 
 mem-initializer-id:
-	[name-specifier] class-name
+	['::'] [nested-name-specifier] class-name
 	identifier
 ```
 

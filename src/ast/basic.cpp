@@ -14,7 +14,7 @@ void TranslationUnit::Print(std::ostream &os, Indent indent) const
 
 void NameSpecifier::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "名称限定: " << (isGlobal ? "(全局)\n" : "\n");
+    os << indent << "名称限定: " << (isGlobal ? "(全局)\n" : "(局部)\n");
     for (std::size_t i = 0; i < path.size(); i++)
         os << indent + 1 << "路径[" << i << "]: " << path[i] << '\n';
 }
