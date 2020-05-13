@@ -1740,8 +1740,8 @@ operator:
 |   ','                         { $$ = Operator::COMMA; }
 |   "->*"                       { $$ = Operator::ARROWSTAR; }
 |   "->"                        { $$ = Operator::ARROW; }
-|   "()"                        { $$ = Operator::CALL; }
-|   "[]"                        { $$ = Operator::SUBSCRIPT; }
+|   '(' ')'                     { $$ = Operator::CALL; }
+|   '[' ']'                     { $$ = Operator::SUBSCRIPT; }
 ;
 
 /* ------------------------------------------------------------------------- *

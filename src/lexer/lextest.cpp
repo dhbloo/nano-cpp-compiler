@@ -5,17 +5,16 @@
 
 const int   EnumStart   = yy::parser::token::IDENTIFIER;
 const char *EnumTable[] = {
-    "IDENTIFIER", "INTVAL",   "FLOATVAL",  "CHARVAL",    "STRVAL",    "BOOLVAL", "COLONCOLON",
-    "DOTSTAR",    "SELFADD",  "SELFSUB",   "SELFMUL",    "SELFDIV",   "SELFMOD", "SELFXOR",
-    "SELFAND",    "SELFOR",   "SHIFTLEFT", "SHIFTRIGHT", "SELFSHL",   "SELFSHR", "EQ",
-    "NE",         "LE",       "GE",        "LOGIAND",    "LOGIOR",    "SELFINC", "SELFDEC",
-    "ARROWSTAR",  "ARROW",    "BOOL",      "BREAK",      "CASE",      "CHAR",    "CLASS",
-    "CONST",      "CONTINUE", "DEFAULT",   "DELETE",     "DO",        "DOUBLE",  "ELSE",
-    "ENUM",       "FALSE",    "FLOAT",     "FOR",        "FRIEND",    "IF",      "INT",
-    "LONG",       "NEW",      "OPERATOR",  "PRIVATE",    "PROTECTED", "PUBLIC",  "REGISTER",
-    "RETURN",     "SHORT",    "SIGNED",    "SIZEOF",     "STATIC",    "STRUCT",  "SWITCH",
-    "THIS",       "TRUE",     "TYPEDEF",   "UNSIGNED",   "VIRTUAL",   "VOID",    "WHILE",
-    "ENDOFFILE"};
+    "IDENTIFIER", "CLASSNAME", "ENUMNAME",   "TYPEDEFNAME", "INTVAL",   "FLOATVAL",  "CHARVAL",
+    "STRVAL",     "BOOLVAL",   "COLONCOLON", "DOTSTAR",     "SELFADD",  "SELFSUB",   "SELFMUL",
+    "SELFDIV",    "SELFMOD",   "SELFXOR",    "SELFAND",     "SELFOR",   "SHIFTLEFT", "SHIFTRIGHT",
+    "SELFSHL",    "SELFSHR",   "EQ",         "NE",          "LE",       "GE",        "LOGIAND",
+    "LOGIOR",     "SELFINC",   "SELFDEC",    "ARROWSTAR",   "ARROW",    "BOOL",      "BREAK",
+    "CASE",       "CHAR",      "CLASS",      "CONST",       "CONTINUE", "DEFAULT",   "DELETE",
+    "DO",         "DOUBLE",    "ELSE",       "ENUM",        "FLOAT",    "FOR",       "FRIEND",
+    "IF",         "INT",       "LONG",       "NEW",         "OPERATOR", "PRIVATE",   "PROTECTED",
+    "PUBLIC",     "RETURN",    "SHORT",      "SIGNED",      "SIZEOF",   "STATIC",    "STRUCT",
+    "SWITCH",     "THIS",      "TYPEDEF",    "UNSIGNED",    "VIRTUAL",  "VOID",      "WHILE"};
 
 bool HasSemanticValue(int t)
 {
