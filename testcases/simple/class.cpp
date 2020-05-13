@@ -1,7 +1,8 @@
 struct A
 {
-    int   x, y;
-    float z;
+    int        x, y, *i;
+    float      z;
+    static int a;
 
     A(int a = 0)
     {
@@ -29,7 +30,7 @@ struct A
 class B : public A
 {
 public:
-    struct D
+    struct D : A
     {
         struct E;
         struct F
@@ -44,15 +45,17 @@ public:
 
 private:
     D d;
+    friend A;
+    friend const D &get_d(const B &b) { return b.d; }
 };
 
-const class C : private B::D
+class C : private B::D
 {
     float  z;
     double w;
 
 public:
-    C(const A *pa, int px) : B::D(1),  a(pa) { x = px + 1; }
+    C(const A *pa, int px) : B::D(1), a(pa) { x = px + 1; }
     ~C() { x = 0; }
     const B &get_b() const { return (const B &)*this; }
 
@@ -63,11 +66,12 @@ private:
 
 class B::D::E
 {
-    A a;
-    B::D d;
+    A       a;
+    B::D    d;
     B::D::F f;
 };
 
+int     A::a = 10;
 A       a, *pa, **ppa;
 B       b, ab[10], ab[10][20];
 C       c;
@@ -76,3 +80,4 @@ B::D::E f;
 B::D::F f;
 
 class A xa, &pxa = xa;
+int A::*mpa, B::D::*mpdb, A::**mppa = &mpa, *A::*pmpa = &A::i;

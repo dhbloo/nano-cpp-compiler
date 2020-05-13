@@ -1216,8 +1216,8 @@ direct_declarator:
 ptr_operator_list:
     ptr_operator
         { $$ = MkNode<PtrSpecifier>(); $$->srcLocation = @$; $$->ptrList.push_back($1); }
-|   ptr_operator_list ptr_operator
-        { $$ = $1; $$->ptrList.push_back($2); }
+|   ptr_operator ptr_operator_list 
+        { $$ = $2; $$->ptrList.push_back($1); }
 ;
 
 ptr_operator:
