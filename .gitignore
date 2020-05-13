@@ -37,3 +37,4 @@ src/lexer/yy*
 src/parser/yy*
 
 *.output
+demo/

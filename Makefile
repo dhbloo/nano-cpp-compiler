@@ -9,7 +9,7 @@ yylexer: src/lexer/ncc.l yyparser
 	cd src/lexer && flex ncc.l
 	$(CXX) -c -o bin/yylexer.o src/lexer/yylexer.cpp
 
-ast: src/ast/node.h src/ast/basic.cpp src/ast/expression.cpp src/ast/declaration.cpp \
+ast: yyparser src/ast/node.h src/ast/basic.cpp src/ast/expression.cpp src/ast/declaration.cpp \
 		src/ast/class.cpp src/ast/statement.cpp src/ast/declarator.cpp
 	$(CXX) -c -o bin/ast_basic.o src/ast/basic.cpp
 	$(CXX) -c -o bin/ast_expression.o src/ast/expression.cpp

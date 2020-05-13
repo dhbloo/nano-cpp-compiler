@@ -187,27 +187,27 @@ literal:
 
 int_literal:
     INTVAL
-        { $$ = MkNode<IntLiteral>(); $$->value = $1; }
+        { $$ = MkNode<IntLiteral>(); $$->srcLocation = @$; $$->value = $1; }
 ;
 
 char_literal:
     CHARVAL
-        { $$ = MkNode<CharLiteral>(); $$->value = $1; }
+        { $$ = MkNode<CharLiteral>(); $$->srcLocation = @$; $$->value = $1; }
 ;
 
 float_literal:
     FLOATVAL
-        { $$ = MkNode<FloatLiteral>(); $$->value = $1; }
+        { $$ = MkNode<FloatLiteral>(); $$->srcLocation = @$; $$->value = $1; }
 ;
 
 string_literal:
     STRVAL
-        { $$ = MkNode<StringLiteral>(); $$->value = $1; }
+        { $$ = MkNode<StringLiteral>(); $$->srcLocation = @$; $$->value = $1; }
 ;
 
 boolean_literal:
     BOOLVAL
-        { $$ = MkNode<BoolLiteral>(); $$->value = $1; }
+        { $$ = MkNode<BoolLiteral>(); $$->srcLocation = @$; $$->value = $1; }
 ;
 
 
@@ -232,9 +232,9 @@ enum_name:
  * ------------------------------------------------------------------------- */
 
 translation_unit:
-        { astRoot = MkNode<TranslationUnit>(); }
+        { astRoot = MkNode<TranslationUnit>(); astRoot->srcLocation = @$; }
 |   declaration_seq
-        { astRoot = MkNode<TranslationUnit>(); astRoot->decls = $1; }
+        { astRoot = MkNode<TranslationUnit>(); astRoot->srcLocation = @$; astRoot->decls = $1; }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -243,7 +243,7 @@ translation_unit:
 
 primary_expression:
     literal                     { $$ = $1; }
-|   THIS                        { $$ = MkNode<ThisExpression>(); }
+|   THIS                        { $$ = MkNode<ThisExpression>(); $$->srcLocation = @$; }
 |   '(' expression ')'          { $$ = $2; }
 |   id_expression               { $$ = $1; }
 ;
@@ -256,7 +256,7 @@ id_expression:
 unqualified_id:
     identifier
         { 
-            $$ = MkNode<IdExpression>();
+            $$ = MkNode<IdExpression>(); $$->srcLocation = @$;
             $$->identifier = $1;
             pc.AddPossibleTypedefName($$->identifier);
         }
@@ -266,7 +266,7 @@ unqualified_id:
         { $$ = $1; }
 |   '~' class_name
         {
-            $$ = MkNode<IdExpression>();
+            $$ = MkNode<IdExpression>(); $$->srcLocation = @$;
             $$->identifier = $2; 
             $$->stype = IdExpression::DESTRUCTOR;
         }
@@ -289,9 +289,9 @@ qualified_id:
         }
 |   "::" identifier
         {
-            $$ = MkNode<IdExpression>(); 
+            $$ = MkNode<IdExpression>(); $$->srcLocation = @$; 
             $$->identifier = $2;
-            $$->nameSpec = MkNode<NameSpecifier>(); 
+            $$->nameSpec = MkNode<NameSpecifier>(); $$->nameSpec->srcLocation = @$; 
             $$->nameSpec->isGlobal = true;
         }
 |   "::" operator_function_id
@@ -301,7 +301,7 @@ qualified_id:
 nested_name_specifier:
     class_name "::"
         { 
-            $$ = MkNode<NameSpecifier>(); 
+            $$ = MkNode<NameSpecifier>(); $$->srcLocation = @$; 
             $$->path.push_back($1);
             pc.PushQueryScope($$->path.back());
         }
@@ -318,7 +318,7 @@ postfix_expression:
         { $$ = $1; }
 |   postfix_expression '[' expression ']'
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::SUBSCRIPT;
             e->left = $1;
             e->right = $3;
@@ -326,21 +326,21 @@ postfix_expression:
         }
 |   postfix_expression '(' expression_list_opt ')'
         {
-            auto e = MkNode<CallExpression>();
+            auto e = MkNode<CallExpression>(); e->srcLocation = @$;
             e->funcExpr = $1;
             e->params = $3;
             $$ = std::move(e);
         }
 |   simple_typename_specifier '{' expression_list_opt '}'
         {
-            auto e = MkNode<ConstructExpression>();
+            auto e = MkNode<ConstructExpression>(); e->srcLocation = @$;
             e->type = $1;
             e->params = $3;
             $$ = std::move(e);
         }
 |   postfix_expression '.' unqualified_id
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::DOT;
             e->left = $1;
             e->right = $3;
@@ -352,7 +352,7 @@ postfix_expression:
             r->nameSpec = $3;
             r->nameSpec->isGlobal = false;
 
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::DOT;
             e->left = $1;
             e->right = std::move(r);
@@ -365,7 +365,7 @@ postfix_expression:
             r->nameSpec = $4;
             r->nameSpec->isGlobal = true;
             
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::DOT;
             e->left = $1;
             e->right = std::move(r);
@@ -374,7 +374,7 @@ postfix_expression:
         }
 |   postfix_expression "->" unqualified_id
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::ARROW;
             e->left = $1;
             e->right = $3;
@@ -382,14 +382,14 @@ postfix_expression:
         }
 |   postfix_expression "++"
         {
-            auto e = MkNode<UnaryExpression>();
+            auto e = MkNode<UnaryExpression>(); e->srcLocation = @$;
             e->op = UnaryOp::POSTINC;
             e->expr = $1;
             $$ = std::move(e);
         }
 |   postfix_expression "--"
         {
-            auto e = MkNode<UnaryExpression>();
+            auto e = MkNode<UnaryExpression>(); e->srcLocation = @$;
             e->op = UnaryOp::POSTDEC;
             e->expr = $1;
             $$ = std::move(e);
@@ -398,7 +398,7 @@ postfix_expression:
 
 expression_list:
     assignment_expression
-        { $$ = MkNode<ExpressionList>(); $$->exprList.push_back($1); }
+        { $$ = MkNode<ExpressionList>(); $$->srcLocation = @$; $$->exprList.push_back($1); }
 |   expression_list ',' assignment_expression
         { $$ = $1; $$->exprList.push_back($3); }
 ;
@@ -408,21 +408,21 @@ unary_expression:
         { $$ = $1; }
 |   unary_operator cast_expression
         { 
-            auto e = MkNode<UnaryExpression>();
+            auto e = MkNode<UnaryExpression>(); e->srcLocation = @$;
             e->op = $1;
             e->expr = $2;
             $$ = std::move(e);
         }
 |   SIZEOF unary_expression
         {
-            auto e = MkNode<UnaryExpression>();
+            auto e = MkNode<UnaryExpression>(); e->srcLocation = @$;
             e->op = UnaryOp::SIZEOF;
             e->expr = $2;
             $$ = std::move(e);
         }
 |   SIZEOF '(' type_id ')'
         {
-            auto e = MkNode<SizeofExpression>();
+            auto e = MkNode<SizeofExpression>(); e->srcLocation = @$;
             e->typeId = $3; 
             $$ = std::move(e);
         }
@@ -453,7 +453,7 @@ new_expression:
         }
 |   NEW '(' type_id ')' new_placememt_opt
         {
-            auto e = MkNode<PlainNew>();
+            auto e = MkNode<PlainNew>(); e->srcLocation = @$;
             e->typeId = $3;
             e->placement = $5;
             $$ = std::move(e);
@@ -466,7 +466,7 @@ new_placememt:
 
 new_type_id:
     type_specifier_seq
-        { $$ = MkNode<InitializableNew>(); $$->typeSpec = $1; }
+        { $$ = MkNode<InitializableNew>(); $$->srcLocation = @$; $$->typeSpec = $1; }
 |   type_specifier_seq new_declarator
         { $$ = $2; $$->typeSpec = $1; }
 ;
@@ -474,18 +474,18 @@ new_type_id:
 new_declarator:
     ptr_operator_list direct_new_declarator
         { 
-            $$ = MkNode<InitializableNew>();
+            $$ = MkNode<InitializableNew>(); $$->srcLocation = @$;
             $$->ptrSpec = $1;
             $$->arraySizes = $2;
         }
 |   ptr_operator_list
         { 
-            $$ = MkNode<InitializableNew>();
+            $$ = MkNode<InitializableNew>(); $$->srcLocation = @$;
             $$->ptrSpec = $1;
         }
 |   direct_new_declarator
         { 
-            $$ = MkNode<InitializableNew>();
+            $$ = MkNode<InitializableNew>(); $$->srcLocation = @$;
             $$->arraySizes = $1;
         }
 ;
@@ -499,7 +499,7 @@ direct_new_declarator:
     
 new_initializer:
     '(' ')'
-        { $$ = MkNode<ExpressionList>(); }
+        { $$ = MkNode<ExpressionList>(); $$->srcLocation = @$; }
 |   '(' expression_list ')'
         { $$ = $2; }
 ;
@@ -507,13 +507,13 @@ new_initializer:
 delete_expression:
     DELETE cast_expression
         {
-            $$ = MkNode<DeleteExpression>();
+            $$ = MkNode<DeleteExpression>(); $$->srcLocation = @$;
             $$->isArray = false;
             $$->expr = $2;
         }
 |   DELETE '[' ']' cast_expression
         {
-            $$ = MkNode<DeleteExpression>();
+            $$ = MkNode<DeleteExpression>(); $$->srcLocation = @$;
             $$->isArray = true;
             $$->expr = $4;
         }
@@ -524,7 +524,7 @@ cast_expression:
         { $$ = $1; }
 |   '(' type_id ')' cast_expression
         {
-            auto e = MkNode<CastExpression>();
+            auto e = MkNode<CastExpression>(); e->srcLocation = @$;
             e->typeId = $2;
             e->expr = $4;
             $$ = std::move(e);
@@ -536,7 +536,7 @@ pm_expression:
         { $$ = $1; }
 |   pm_expression ".*" cast_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::DOTSTAR;
             e->left = $1;
             e->right = $3;
@@ -544,7 +544,7 @@ pm_expression:
         }
 |   pm_expression "->*" cast_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::ARROWSTAR;
             e->left = $1;
             e->right = $3;
@@ -557,7 +557,7 @@ multiplicative_expression:
         { $$ = $1; }
 |   multiplicative_expression '*' pm_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::MUL;
             e->left = $1;
             e->right = $3;
@@ -565,7 +565,7 @@ multiplicative_expression:
         }
 |   multiplicative_expression '/' pm_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::DIV;
             e->left = $1;
             e->right = $3;
@@ -573,7 +573,7 @@ multiplicative_expression:
         }
 |   multiplicative_expression '%' pm_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::MOD;
             e->left = $1;
             e->right = $3;
@@ -586,7 +586,7 @@ additive_expression:
         { $$ = $1; }
 |   additive_expression '+' multiplicative_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::ADD;
             e->left = $1;
             e->right = $3;
@@ -594,7 +594,7 @@ additive_expression:
         }
 |   additive_expression '-' multiplicative_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::SUB;
             e->left = $1;
             e->right = $3;
@@ -607,7 +607,7 @@ shift_expression:
         { $$ = $1; }
 |   shift_expression "<<" additive_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::SHL;
             e->left = $1;
             e->right = $3;
@@ -615,7 +615,7 @@ shift_expression:
         }
 |   shift_expression ">>" additive_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::SHR;
             e->left = $1;
             e->right = $3;
@@ -628,7 +628,7 @@ relational_expression:
         { $$ = $1; }
 |   relational_expression '<' shift_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::LT;
             e->left = $1;
             e->right = $3;
@@ -636,7 +636,7 @@ relational_expression:
         }
 |   relational_expression '>' shift_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::GT;
             e->left = $1;
             e->right = $3;
@@ -644,7 +644,7 @@ relational_expression:
         }
 |   relational_expression "<=" shift_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::LE;
             e->left = $1;
             e->right = $3;
@@ -652,7 +652,7 @@ relational_expression:
         }
 |   relational_expression ">=" shift_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::GE;
             e->left = $1;
             e->right = $3;
@@ -665,7 +665,7 @@ equality_expression:
         { $$ = $1; }
 |   equality_expression "==" relational_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::EQ;
             e->left = $1;
             e->right = $3;
@@ -673,7 +673,7 @@ equality_expression:
         }
 |   equality_expression "!=" relational_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::NE;
             e->left = $1;
             e->right = $3;
@@ -686,7 +686,7 @@ and_expression:
         { $$ = $1; }
 |   and_expression '&' equality_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::AND;
             e->left = $1;
             e->right = $3;
@@ -699,7 +699,7 @@ exclusive_or_expression:
         { $$ = $1; }
 |   exclusive_or_expression '^' and_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::XOR;
             e->left = $1;
             e->right = $3;
@@ -712,7 +712,7 @@ inclusive_or_expression:
         { $$ = $1; }
 |   inclusive_or_expression '|' exclusive_or_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::OR;
             e->left = $1;
             e->right = $3;
@@ -725,7 +725,7 @@ logical_and_expression:
         { $$ = $1; }
 |   logical_and_expression "&&" inclusive_or_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::LOGIAND;
             e->left = $1;
             e->right = $3;
@@ -738,7 +738,7 @@ logical_or_expression:
         { $$ = $1; }
 |   logical_or_expression "||" logical_and_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::LOGIOR;
             e->left = $1;
             e->right = $3;
@@ -751,7 +751,7 @@ conditional_expression:
         { $$ = $1; }
 |   logical_or_expression '?' expression ':' assignment_expression
         {
-            auto e = MkNode<ConditionalExpression>();
+            auto e = MkNode<ConditionalExpression>(); e->srcLocation = @$;
             e->condition = $1;
             e->trueExpr = $3;
             e->falseExpr = $5;
@@ -764,7 +764,7 @@ assignment_expression:
         { $$ = $1; }
 |   logical_or_expression assignment_operator assignment_expression
         {
-            auto e = MkNode<AssignmentExpression>();
+            auto e = MkNode<AssignmentExpression>(); e->srcLocation = @$;
             e->op = $2;
             e->left = $1;
             e->right = $3;
@@ -791,7 +791,7 @@ expression:
         { $$ = $1; }
 |   expression ',' assignment_expression
         {
-            auto e = MkNode<BinaryExpression>();
+            auto e = MkNode<BinaryExpression>(); e->srcLocation = @$;
             e->op = BinaryOp::COMMA;
             e->left = $1;
             e->right = $3;
@@ -820,14 +820,14 @@ statement:
 labeled_statement:
     CASE constant_expression ':' statement
         {
-            auto e = MkNode<CaseStatement>();
+            auto e = MkNode<CaseStatement>(); e->srcLocation = @$;
             e->constant = $2;
             e->stmt = $4;
             $$ = std::move(e);
         }
 |   DEFAULT ':' statement
         {
-            auto e = MkNode<DefaultStatement>();
+            auto e = MkNode<DefaultStatement>(); e->srcLocation = @$;
             e->stmt = $3;
             $$ = std::move(e);
         }
@@ -835,12 +835,12 @@ labeled_statement:
 
 expression_statement:
     expression_opt ';'
-        { $$ = MkNode<ExpressionStatement>(); $$->expr = $1; }
+        { $$ = MkNode<ExpressionStatement>(); $$->srcLocation = @$; $$->expr = $1; }
 ;
 
 compound_statement:
     '{' '}'
-        { $$ = MkNode<CompoundStatement>(); }
+        { $$ = MkNode<CompoundStatement>(); $$->srcLocation = @$; }
 |   '{'
         { pc.EnterAnonymousScope(); } 
     statement_seq '}'
@@ -849,7 +849,7 @@ compound_statement:
 
 statement_seq:
     statement
-        { $$ = MkNode<CompoundStatement>(); $$->stmts.push_back($1); }
+        { $$ = MkNode<CompoundStatement>(); $$->srcLocation = @$; $$->stmts.push_back($1); }
 |   statement_seq statement
         { $$ = $1; $$->stmts.push_back($2); }
 |   error ';'
@@ -861,7 +861,7 @@ statement_seq:
 selection_statement:
     IF '(' condition ')' statement else_statement
         {
-            auto e = MkNode<IfStatement>();
+            auto e = MkNode<IfStatement>(); e->srcLocation = @$;
             e->condition = $3;
             e->trueStmt = $5;
             e->falseStmt = $6;
@@ -869,7 +869,7 @@ selection_statement:
         }
 |   SWITCH '(' condition ')' statement
         {
-            auto e = MkNode<SwitchStatement>();
+            auto e = MkNode<SwitchStatement>(); e->srcLocation = @$;
             e->condition = $3;
             e->stmt = $5;
             $$ = std::move(e);
@@ -887,14 +887,14 @@ condition:
 iteration_statement:
     WHILE '(' condition ')' statement
         {
-            auto e = MkNode<WhileStatement>();
+            auto e = MkNode<WhileStatement>(); e->srcLocation = @$;
             e->condition = $3;
             e->stmt = $5;
             $$ = std::move(e);
         }
 |   DO statement WHILE '(' expression ')' ';'
         {
-            auto e = MkNode<DoStatement>();
+            auto e = MkNode<DoStatement>(); e->srcLocation = @$;
             e->condition = $5;
             e->stmt = $2;
             $$ = std::move(e);
@@ -912,13 +912,13 @@ iteration_statement:
 for_init_statement:
     expression_statement
         {
-            $$ = MkNode<ForStatement>();
+            $$ = MkNode<ForStatement>(); $$->srcLocation = @$;
             $$->initType = ForStatement::EXPR;
             $$->exprInit = $1;
         }
 |   simple_declaration
         {
-            $$ = MkNode<ForStatement>();
+            $$ = MkNode<ForStatement>(); $$->srcLocation = @$;
             $$->initType = ForStatement::DECL;
             $$->declInit = $1;
         }
@@ -926,12 +926,12 @@ for_init_statement:
 
 jump_statement:
     BREAK ';'
-        { $$ = MkNode<JumpStatement>(); $$->type = JumpStatement::BREAK; }
+        { $$ = MkNode<JumpStatement>(); $$->srcLocation = @$; $$->type = JumpStatement::BREAK; }
 |   CONTINUE ';'
-        { $$ = MkNode<JumpStatement>(); $$->type = JumpStatement::CONTINUE; }
+        { $$ = MkNode<JumpStatement>(); $$->srcLocation = @$; $$->type = JumpStatement::CONTINUE; }
 |   RETURN expression_opt ';'
         {
-            $$ = MkNode<JumpStatement>(); 
+            $$ = MkNode<JumpStatement>(); $$->srcLocation = @$; 
             $$->type = JumpStatement::RETURN; 
             $$->retExpr = $2;
         }
@@ -939,7 +939,7 @@ jump_statement:
 
 declaration_statement:
     block_declaration
-        { $$ = MkNode<DeclerationStatement>(); $$->decl = $1; }
+        { $$ = MkNode<DeclerationStatement>(); $$->srcLocation = @$; $$->decl = $1; }
 ;
 
 /* ------------------------------------------------------------------------- *
@@ -973,13 +973,13 @@ block_declaration:
 simple_declaration:
     decl_specifier_seq ';'
         { 
-            $$ = MkNode<BlockDeclaration>(); 
+            $$ = MkNode<BlockDeclaration>(); $$->srcLocation = @$; 
             $$->declSpec = $1; 
             pc.EndTypedef();
         }
 |   decl_specifier_seq init_declarator_list ';'
         { 
-            $$ = MkNode<BlockDeclaration>();
+            $$ = MkNode<BlockDeclaration>(); $$->srcLocation = @$;
             $$->declSpec = $1;
             $$->initDeclList = $2;
             pc.EndTypedef();
@@ -988,16 +988,16 @@ simple_declaration:
     
 decl_specifier:
     type_specifier
-        { $$ = MkNode<DeclSpecifier>(); $$->typeSpec = $1; }
+        { $$ = MkNode<DeclSpecifier>(); $$->srcLocation = @$; $$->typeSpec = $1; }
 |   function_specifier          
         { $$ = $1; }
 |   STATIC
-        { $$ = MkNode<DeclSpecifier>(); $$->isStatic = true; }
+        { $$ = MkNode<DeclSpecifier>(); $$->srcLocation = @$; $$->isStatic = true; }
 |   FRIEND
-        { $$ = MkNode<DeclSpecifier>(); $$->isFriend = true; }
+        { $$ = MkNode<DeclSpecifier>(); $$->srcLocation = @$; $$->isFriend = true; }
 |   TYPEDEF
         { 
-            $$ = MkNode<DeclSpecifier>(); 
+            $$ = MkNode<DeclSpecifier>(); $$->srcLocation = @$; 
             $$->isTypedef = true; 
             pc.BeginTypedef();
         }
@@ -1017,25 +1017,25 @@ decl_specifier_seq:
     
 function_specifier:
     VIRTUAL
-        { $$ = MkNode<DeclSpecifier>(); $$->isVirtual = true; }
+        { $$ = MkNode<DeclSpecifier>(); $$->srcLocation = @$; $$->isVirtual = true; }
 ;
 
 type_specifier:
     simple_type_specifier
         { 
-            auto e = MkNode<SimpleTypeSpecifier>(); 
+            auto e = MkNode<SimpleTypeSpecifier>(); e->srcLocation = @$; 
             e->fundTypePart = $1; 
             $$ = std::move(e);
         }
 |   class_specifier
         { 
-            auto e = MkNode<ClassTypeSpecifier>(); 
+            auto e = MkNode<ClassTypeSpecifier>(); e->srcLocation = @$; 
             e->classType = $1; 
             $$ = std::move(e);
         }
 |   enum_specifier
         { 
-            auto e = MkNode<EnumTypeSpecifier>(); 
+            auto e = MkNode<EnumTypeSpecifier>(); e->srcLocation = @$; 
             e->enumType = $1; 
             $$ = std::move(e);
         }
@@ -1043,7 +1043,7 @@ type_specifier:
         { $$ = $1; }
 |   cv_qualifier
         { 
-            auto e = MkNode<TypeSpecifier>(); 
+            auto e = MkNode<TypeSpecifier>(); e->srcLocation = @$; 
             e->cv = $1; 
             $$ = std::move(e);
         }
@@ -1065,19 +1065,19 @@ simple_type_specifier:
 type_name:
     class_name
         { 
-            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
             $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
             $$->typeName = $1;
         }
 |   enum_name
         { 
-            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
             $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
             $$->typeName = $1;
         }
 |   typedef_name
         { 
-            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
             $$->typeClass = ElaboratedTypeSpecifier::TYPEDEFNAME;
             $$->typeName = $1;
         }
@@ -1103,14 +1103,14 @@ elaborated_type_specifier:
         { $$ = $1; }
 |   ENUM enum_name
         { 
-            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
             $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
             $$->typeName = $2;
             pc.PopQueryScopes();
         }
 |   ENUM nested_name_specifier enum_name
-        { 
-            $$ = MkNode<ElaboratedTypeSpecifier>();  
+        {
+            $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
             $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
             $$->typeName = $3;
             $$->nameSpec = $2;
@@ -1121,12 +1121,11 @@ elaborated_type_specifier:
 enum_specifier:
     ENUM identifier_opt '{' '}'
         {
-            $$ = MkNode<EnumSpecifier>();
+            $$ = MkNode<EnumSpecifier>(); $$->srcLocation = @$;
             $$->identifier = $2;
 
             if (!$$->identifier.empty())
-                if (!pc.AddName($$->identifier, ParseContext::ENUM))
-                    throw syntax_error(@3, "redeclear of identifier " + $$->identifier);
+                pc.AddName($$->identifier, ParseContext::ENUM);
         }
 |   ENUM identifier_opt '{' enumerator_list '}'
         {
@@ -1134,14 +1133,13 @@ enum_specifier:
             $$->identifier = $2;
 
             if (!$$->identifier.empty())
-                if (!pc.AddName($$->identifier, ParseContext::ENUM))
-                    throw syntax_error(@3, "redeclear of identifier " + $$->identifier);
+                pc.AddName($$->identifier, ParseContext::ENUM);
         }
 ;
     
 enumerator_list:
     enumerator_definition 
-        { $$ = MkNode<EnumSpecifier>(); $$->enumList.push_back($1); }
+        { $$ = MkNode<EnumSpecifier>(); $$->srcLocation = @$; $$->enumList.push_back($1); }
 |   enumerator_list ',' enumerator_definition
         { $$ = $1; $$->enumList.push_back($3); }
 ;
@@ -1194,7 +1192,7 @@ direct_declarator:
         { $$ = $1; }
 |   direct_declarator '(' parameter_declaration_list ')' cv_qualifier_opt
         {
-            auto e = MkNode<FunctionDeclarator>();
+            auto e = MkNode<FunctionDeclarator>(); e->srcLocation = @$;
             e->retType = $1;
             e->params = $3;
             e->isFuncConst = $5;
@@ -1202,14 +1200,14 @@ direct_declarator:
         }
 |   direct_declarator '[' constant_expression_opt ']' 
         {
-            auto e = MkNode<ArrayDeclarator>();
+            auto e = MkNode<ArrayDeclarator>(); e->srcLocation = @$;
             e->elemType = $1;
             e->size = $3;
             $$ = std::move(e);
         }
 |   '(' declarator ')'
         { 
-            auto e = MkNode<NestedDeclarator>(); 
+            auto e = MkNode<NestedDeclarator>(); e->srcLocation = @$; 
             e->decl = $2; 
             $$ = std::move(e); 
         }
@@ -1217,7 +1215,7 @@ direct_declarator:
 
 ptr_operator_list:
     ptr_operator
-        { $$ = MkNode<PtrSpecifier>(); $$->ptrList.push_back($1); }
+        { $$ = MkNode<PtrSpecifier>(); $$->srcLocation = @$; $$->ptrList.push_back($1); }
 |   ptr_operator_list ptr_operator
         { $$ = $1; $$->ptrList.push_back($2); }
 ;
@@ -1245,13 +1243,13 @@ cv_qualifier:
 
 declarator_id:
     id_expression
-        { $$ = MkNode<IdDeclarator>(); $$->id = $1; }
+        { $$ = MkNode<IdDeclarator>(); $$->srcLocation = @$; $$->id = $1; }
 ;
 
 type_id:
     type_specifier_seq abstract_declarator_opt
         {
-            $$ = MkNode<TypeId>();
+            $$ = MkNode<TypeId>(); $$->srcLocation = @$;
             $$->typeSpec = $1;
             $$->abstractDecl = $2;
         }
@@ -1273,7 +1271,7 @@ abstract_declarator:
     direct_abstract_declarator
         { $$ = $1; }
 |   ptr_operator_list
-        { $$ = MkNode<Declarator>(); $$->ptrSpec = $1; }
+        { $$ = MkNode<Declarator>(); $$->srcLocation = @$; $$->ptrSpec = $1; }
 |   ptr_operator_list direct_abstract_declarator
         { $$ = $2; $$->ptrSpec = $1; }
 ;
@@ -1281,20 +1279,20 @@ abstract_declarator:
 direct_abstract_declarator:
     '(' parameter_declaration_list ')' cv_qualifier_opt
         {
-            auto e = MkNode<FunctionDeclarator>();
+            auto e = MkNode<FunctionDeclarator>(); e->srcLocation = @$;
             e->params = $2;
             e->isFuncConst = $4;
             $$ = std::move(e);
         }
 |   '[' constant_expression_opt ']'
         {
-            auto e = MkNode<ArrayDeclarator>();
+            auto e = MkNode<ArrayDeclarator>(); e->srcLocation = @$;
             e->size = $2;
             $$ = std::move(e);
         }
 |   direct_abstract_declarator '(' parameter_declaration_list ')' cv_qualifier_opt
         {
-            auto e = MkNode<FunctionDeclarator>();
+            auto e = MkNode<FunctionDeclarator>(); e->srcLocation = @$;
             e->retType = $1;
             e->params = $3;
             e->isFuncConst = $5;
@@ -1302,14 +1300,14 @@ direct_abstract_declarator:
         }
 |   direct_abstract_declarator '[' constant_expression_opt ']' 
         {
-            auto e = MkNode<ArrayDeclarator>();
+            auto e = MkNode<ArrayDeclarator>(); e->srcLocation = @$;
             e->elemType = $1;
             e->size = $3;
             $$ = std::move(e);
         }
 |   '(' abstract_declarator ')'
         { 
-            auto e = MkNode<NestedDeclarator>(); 
+            auto e = MkNode<NestedDeclarator>(); e->srcLocation = @$; 
             e->decl = $2; 
             $$ = std::move(e);
         }
@@ -1326,14 +1324,14 @@ parameter_declaration_list:
 parameter_declaration:
     decl_specifier_seq declarator assignment_expression_opt
         {
-            $$ = MkNode<ParameterDeclaration>();
+            $$ = MkNode<ParameterDeclaration>(); $$->srcLocation = @$;
             $$->declSpec = $1;
             $$->decl = $2;
             $$->defaultExpr = $3;
         }
 |   decl_specifier_seq abstract_declarator_opt assignment_expression_opt
         {
-            $$ = MkNode<ParameterDeclaration>();
+            $$ = MkNode<ParameterDeclaration>(); $$->srcLocation = @$;
             $$->declSpec = $1;
             $$->decl = $2;
             $$->defaultExpr = $3;
@@ -1343,7 +1341,7 @@ parameter_declaration:
 function_definition:
     declarator function_body
         {
-            $$ = MkNode<FunctionDefinition>();
+            $$ = MkNode<FunctionDefinition>(); $$->srcLocation = @$;
             $$->declarator = $1;
             $$->funcBody = $2;
         }
@@ -1351,30 +1349,30 @@ function_definition:
         {
             auto decl = $1;
             if (typeid(*decl->typeSpec) != typeid(ElaboratedTypeSpecifier))
-                throw syntax_error(@2, "expect member name or ';' here");
+                throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
 
             auto edecl = static_cast<ElaboratedTypeSpecifier*>(decl->typeSpec.get());
             if (edecl->typeClass != ElaboratedTypeSpecifier::CLASSNAME
                 || edecl->typeName != pc.CurLocalScopeName())
-                throw syntax_error(@1, "expect member name or ';' here");
+                throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
 
-            auto i = MkNode<IdDeclarator>();
-            i->id = MkNode<IdExpression>();
+            auto i = MkNode<IdDeclarator>(); i->srcLocation = @$;
+            i->id = MkNode<IdExpression>(); i->id->srcLocation = @$;
             i->id->identifier = edecl->typeName;
             i->id->stype = IdExpression::CONSTRUCTOR;
 
-            auto e = MkNode<FunctionDeclarator>();
+            auto e = MkNode<FunctionDeclarator>(); e->srcLocation = @$;
             e->retType = std::move(i);
             e->params = $3;
 
-            $$ = MkNode<FunctionDefinition>();
+            $$ = MkNode<FunctionDefinition>(); $$->srcLocation = @$;
             $$->declarator = std::move(e);
             $$->ctorInitList = $5;
             $$->funcBody = $6;
         }
 |   decl_specifier_seq declarator function_body
         {
-            $$ = MkNode<FunctionDefinition>();
+            $$ = MkNode<FunctionDefinition>(); $$->srcLocation = @$;
             $$->declSpec = $1;
             $$->declarator = $2;
             $$->funcBody = $3;
@@ -1389,7 +1387,7 @@ initializer:
     '=' initializer_clause      { $$ = $2; }
 |   '(' expression_list ')'     
         { 
-            auto e = MkNode<ParenthesisInitializer>(); 
+            auto e = MkNode<ParenthesisInitializer>(); e->srcLocation = @$; 
             e->exprList = $2; 
             $$ = std::move(e);
         }
@@ -1398,19 +1396,19 @@ initializer:
 initializer_clause:
     assignment_expression
         { 
-            auto e = MkNode<AssignmentInitializer>(); 
+            auto e = MkNode<AssignmentInitializer>(); e->srcLocation = @$; 
             e->expr = $1; 
             $$ = std::move(e);
         }
 |   '{' initializer_list COMMA_opt '}'
         { $$ = $2; }
 |   '{' '}'
-        { $$ = MkNode<ListInitializer>(); }
+        { $$ = MkNode<ListInitializer>(); $$->srcLocation = @$; }
 ;
 
 initializer_list:
     initializer_clause
-        { $$ = MkNode<ListInitializer>(); $$->initList.push_back($1); }
+        { $$ = MkNode<ListInitializer>(); $$->srcLocation = @$; $$->initList.push_back($1); }
 |   initializer_list ',' initializer_clause
         { $$ = $1; $$->initList.push_back($3); }
 ;
@@ -1435,29 +1433,35 @@ class_specifier:
 class_head:
     class_key base_clause_opt
         {
-            $$ = MkNode<ClassSpecifier>();
+            $$ = MkNode<ClassSpecifier>(); $$->srcLocation = @$;
             $$->key = $1;
             $$->baseSpec = $2;
         }
 |   class_key identifier base_clause_opt
         {
-            $$ = MkNode<ClassSpecifier>();
+            $$ = MkNode<ClassSpecifier>(); $$->srcLocation = @$;
             $$->key = $1;
             $$->identifier = $2;
             $$->baseSpec = $3;
-
-            if (!pc.AddName($$->identifier, ParseContext::CLASS))
-                throw syntax_error(@3, "redeclear of identifier " + $$->identifier);
+            pc.AddName($$->identifier, ParseContext::CLASS);
         }
 |   class_key nested_name_specifier class_name base_clause_opt
         {
-            $$ = MkNode<ClassSpecifier>();
+            $$ = MkNode<ClassSpecifier>(); $$->srcLocation = @$;
             $$->key = $1;
             $$->nameSpec = $2;
             $$->identifier = $3;
             $$->baseSpec = $4;
             pc.PopQueryScopes();
         }
+|   class_key enum_name base_clause_opt
+        { throw syntax_error(@2, "use of " + $2 + " does not match previous declaration"); }
+|   class_key nested_name_specifier enum_name base_clause_opt
+        { throw syntax_error(@3, "use of " + $3 + " does not match previous declaration"); }
+|   class_key typedef_name base_clause_opt
+        { throw syntax_error(@2, "use of " + $2 + " does not match previous declaration"); }
+|   class_key typedef_name enum_name base_clause_opt
+        { throw syntax_error(@3, "use of " + $3 + " does not match previous declaration"); }
 ;
 
 class_key:
@@ -1472,22 +1476,21 @@ base_clause_opt:                { $$ = nullptr; }
 forward_class_specifier:
     class_key identifier
         {
-            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
             $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
             $$->typeName = $2;
 
-            if (!pc.AddName($$->typeName, ParseContext::CLASS))
-                throw syntax_error(@2, "redeclear of classname " + $$->typeName);
+            pc.AddName($$->typeName, ParseContext::CLASS);
         }
 |   class_key class_name
         { 
-            $$ = MkNode<ElaboratedTypeSpecifier>();
+            $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;
             $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
             $$->typeName = $2;
         }
 |   class_key nested_name_specifier class_name
         { 
-            $$ = MkNode<ElaboratedTypeSpecifier>();  
+            $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
             $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
             $$->typeName = $3;
             $$->nameSpec = $2;
@@ -1496,7 +1499,7 @@ forward_class_specifier:
 ;
     
 member_specification:
-        { $$ = MkNode<MemberList>(); }
+        { $$ = MkNode<MemberList>(); $$->srcLocation = @$; }
 |   member_declaration member_specification
         { $$ = $2; $$->defaultMember.push_back($1); }
 |   access_specifier ':' member_specification
@@ -1508,14 +1511,14 @@ member_specification:
 member_declaration:
     decl_specifier_seq member_declarator_list ';'
         {
-            auto e = MkNode<MemberDefinition>();
+            auto e = MkNode<MemberDefinition>(); e->srcLocation = @$;
             e->declSpec = $1;
             e->decls = $2;
             $$ = std::move(e);
         }
 |   member_declarator ';'
         {
-            auto e = MkNode<MemberDefinition>();
+            auto e = MkNode<MemberDefinition>(); e->srcLocation = @$;
             e->decls.push_back($1);
             $$ = std::move(e);
         }
@@ -1523,33 +1526,33 @@ member_declaration:
         {
             auto decl = $1;
             if (typeid(*decl->typeSpec) != typeid(ElaboratedTypeSpecifier))
-                throw syntax_error(@1, "expect member name or ';' here");
+                throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
 
             auto edecl = static_cast<ElaboratedTypeSpecifier*>(decl->typeSpec.get());
             if (edecl->typeClass != ElaboratedTypeSpecifier::CLASSNAME
                 || edecl->typeName != pc.CurLocalScopeName())
-                throw syntax_error(@1, "expect member name or ';' here");
+                throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
 
-            auto i = MkNode<IdDeclarator>();
-            i->id = MkNode<IdExpression>();
+            auto i = MkNode<IdDeclarator>(); i->srcLocation = @$;
+            i->id = MkNode<IdExpression>(); i->id->srcLocation = @$;
             i->id->identifier = edecl->typeName;
             i->id->stype = IdExpression::CONSTRUCTOR;
 
-            auto f = MkNode<FunctionDeclarator>();
+            auto f = MkNode<FunctionDeclarator>(); f->srcLocation = @$;
             f->retType = std::move(i);
             f->params = $3;
 
-            auto d = MkNode<MemberDeclarator>();
+            auto d = MkNode<MemberDeclarator>(); d->srcLocation = @$;
             d->decl = std::move(f);
 
-            auto e = MkNode<MemberDefinition>();
+            auto e = MkNode<MemberDefinition>(); e->srcLocation = @$;
             e->decls.push_back(std::move(d));
 
             $$ = std::move(e);
         }
 |   function_definition COMMA_opt
         { 
-            auto e = MkNode<MemberFunction>(); 
+            auto e = MkNode<MemberFunction>(); e->srcLocation = @$; 
             e->func = $1; 
             $$ = std::move(e);
         }
@@ -1566,13 +1569,13 @@ member_declarator_list:
 member_declarator:
     declarator pure_specifier_opt
         {
-            $$ = MkNode<MemberDeclarator>();
+            $$ = MkNode<MemberDeclarator>(); $$->srcLocation = @$;
             $$->decl = $1;
             $$->isPure = $2;
         }
 |   declarator constant_initializer
         {
-            $$ = MkNode<MemberDeclarator>();
+            $$ = MkNode<MemberDeclarator>(); $$->srcLocation = @$;
             $$->decl = $1;
             $$->constInit = $2;
         }
@@ -1600,13 +1603,13 @@ base_clause:
 base_specifier:
     class_name
         {
-            $$ = MkNode<BaseSpecifier>();
+            $$ = MkNode<BaseSpecifier>(); $$->srcLocation = @$;
             $$->access = Access::DEFAULT;
             $$->className = $1;
         }
 |   nested_name_specifier class_name
         {
-            $$ = MkNode<BaseSpecifier>();
+            $$ = MkNode<BaseSpecifier>(); $$->srcLocation = @$;
             $$->access = Access::DEFAULT;
             $$->nameSpec = $1;
             $$->className = $2;
@@ -1614,13 +1617,13 @@ base_specifier:
         }
 |   access_specifier class_name
         {
-            $$ = MkNode<BaseSpecifier>();
+            $$ = MkNode<BaseSpecifier>(); $$->srcLocation = @$;
             $$->access = $1;
             $$->className = $2;
         }
 |   access_specifier nested_name_specifier class_name
         {
-            $$ = MkNode<BaseSpecifier>();
+            $$ = MkNode<BaseSpecifier>(); $$->srcLocation = @$;
             $$->access = $1;
             $$->nameSpec = $2;
             $$->className = $3;
@@ -1645,7 +1648,7 @@ conversion_function_id:
 conversion_type_id:
     type_specifier_seq conversion_declarator_opt
         {
-            $$ = MkNode<ConversionFunctionId>();
+            $$ = MkNode<ConversionFunctionId>(); $$->srcLocation = @$;
             $$->typeSpec = $1;
             $$->ptrSpec = $2;
         }
@@ -1674,13 +1677,13 @@ mem_initializer:
 mem_initializer_id:
     class_name
         {
-            $$ = MkNode<CtorMemberInitializer>();
+            $$ = MkNode<CtorMemberInitializer>(); $$->srcLocation = @$;
             $$->identifier = $1;
             $$->isBaseCtor = true;
         }
 |   nested_name_specifier class_name
         {
-            $$ = MkNode<CtorMemberInitializer>();
+            $$ = MkNode<CtorMemberInitializer>(); $$->srcLocation = @$;
             $$->nameSpec = $1;
             $$->identifier = $2;
             $$->isBaseCtor = true;
@@ -1688,7 +1691,7 @@ mem_initializer_id:
         }
 |   identifier
         {
-            $$ = MkNode<CtorMemberInitializer>();
+            $$ = MkNode<CtorMemberInitializer>(); $$->srcLocation = @$;
             $$->identifier = $1;
             $$->isBaseCtor = false;
         }
@@ -1700,7 +1703,7 @@ mem_initializer_id:
 
 operator_function_id:
     OPERATOR operator
-        { $$ = MkNode<OperatorFunctionId>(); $$->overloadOp = $2; }
+        { $$ = MkNode<OperatorFunctionId>(); $$->srcLocation = @$; $$->overloadOp = $2; }
 ;
 
 operator:

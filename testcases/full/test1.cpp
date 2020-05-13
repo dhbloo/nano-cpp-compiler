@@ -1,9 +1,3 @@
-// ConsoleApplication1.cpp : 定义控制台应用程序的入口点。
-//
-
-// 测试者：CS1702班 U201714568 王霖
-// 已将不能实现的部分注释，或在其下方写下可以实现的功能
-
 //#include "stdafx.h"
 
 int a, b, c;

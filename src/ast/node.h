@@ -2,6 +2,7 @@
 
 #include "../core/operator.h"
 #include "../core/type.h"
+#include "../parser/yylocation.h"
 
 #include <cstdint>
 #include <memory>
@@ -75,7 +76,6 @@ struct EnumSpecifier;
 
 // Declarator
 
-struct InitDeclarator;
 struct PtrSpecifier;
 struct Declarator;
 struct FunctionDeclarator;
@@ -166,6 +166,7 @@ private:
 
 struct Node
 {
+    yy::location srcLocation;
     virtual void Print(std::ostream &os, Indent indent) const /* = 0*/ {}
 };
 
