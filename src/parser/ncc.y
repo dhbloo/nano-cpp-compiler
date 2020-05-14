@@ -1184,7 +1184,13 @@ declarator:
     direct_declarator
         { $$ = $1; }
 |   ptr_operator_list direct_declarator
-        { $$ = $2; $$->ptrSpec = $1; }
+        {
+            auto e = MkNode<Declarator>(); 
+            e->srcLocation = @$;
+            e->ptrSpec = $1;
+            $$ = $2;
+            $$->Append(std::move(e));
+        }
 ;
 
 direct_declarator:
@@ -1192,25 +1198,23 @@ direct_declarator:
         { $$ = $1; }
 |   direct_declarator '(' parameter_declaration_list ')' cv_qualifier_opt
         {
-            auto e = MkNode<FunctionDeclarator>(); e->srcLocation = @$;
-            e->retType = $1;
+            auto e = MkNode<FunctionDeclarator>(); 
+            e->srcLocation = @$;
             e->params = $3;
             e->isFuncConst = $5;
-            $$ = std::move(e);
+            $$ = $1;
+            $$->Append(std::move(e));
         }
 |   direct_declarator '[' constant_expression_opt ']' 
         {
-            auto e = MkNode<ArrayDeclarator>(); e->srcLocation = @$;
-            e->elemType = $1;
+            auto e = MkNode<ArrayDeclarator>(); 
+            e->srcLocation = @$;
             e->size = $3;
-            $$ = std::move(e);
+            $$ = $1;
+            $$->Append(std::move(e));
         }
 |   '(' declarator ')'
-        { 
-            auto e = MkNode<NestedDeclarator>(); e->srcLocation = @$; 
-            e->decl = $2; 
-            $$ = std::move(e); 
-        }
+        { $$ = $2; }
 ;
 
 ptr_operator_list:
@@ -1273,44 +1277,49 @@ abstract_declarator:
 |   ptr_operator_list
         { $$ = MkNode<Declarator>(); $$->srcLocation = @$; $$->ptrSpec = $1; }
 |   ptr_operator_list direct_abstract_declarator
-        { $$ = $2; $$->ptrSpec = $1; }
+        {
+            auto e = MkNode<Declarator>(); e->srcLocation = @$;
+            e->ptrSpec = $1;
+            $$ = $2;
+            $$->Append(std::move(e));
+        }
 ;
 
 direct_abstract_declarator:
     '(' parameter_declaration_list ')' cv_qualifier_opt
         {
-            auto e = MkNode<FunctionDeclarator>(); e->srcLocation = @$;
+            auto e = MkNode<FunctionDeclarator>(); 
+            e->srcLocation = @$;
             e->params = $2;
             e->isFuncConst = $4;
             $$ = std::move(e);
         }
 |   '[' constant_expression_opt ']'
         {
-            auto e = MkNode<ArrayDeclarator>(); e->srcLocation = @$;
+            auto e = MkNode<ArrayDeclarator>(); 
+            e->srcLocation = @$;
             e->size = $2;
             $$ = std::move(e);
         }
 |   direct_abstract_declarator '(' parameter_declaration_list ')' cv_qualifier_opt
         {
-            auto e = MkNode<FunctionDeclarator>(); e->srcLocation = @$;
-            e->retType = $1;
+            auto e = MkNode<FunctionDeclarator>(); 
+            e->srcLocation = @$;
             e->params = $3;
             e->isFuncConst = $5;
-            $$ = std::move(e);
+            $$ = $1;
+            $$->Append(std::move(e));
         }
 |   direct_abstract_declarator '[' constant_expression_opt ']' 
         {
-            auto e = MkNode<ArrayDeclarator>(); e->srcLocation = @$;
-            e->elemType = $1;
+            auto e = MkNode<ArrayDeclarator>(); 
+            e->srcLocation = @$;
             e->size = $3;
-            $$ = std::move(e);
+            $$ = $1;
+            $$->Append(std::move(e));
         }
 |   '(' abstract_declarator ')'
-        { 
-            auto e = MkNode<NestedDeclarator>(); e->srcLocation = @$; 
-            e->decl = $2; 
-            $$ = std::move(e);
-        }
+        { $$ = $2; }
 ;
 
 parameter_declaration_list:
@@ -1356,14 +1365,14 @@ function_definition:
                 || edecl->typeName != pc.CurLocalScopeName())
                 throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
 
+            auto e = MkNode<FunctionDeclarator>(); e->srcLocation = @$;
+            e->params = $3;
+
             auto i = MkNode<IdDeclarator>(); i->srcLocation = @$;
             i->id = MkNode<IdExpression>(); i->id->srcLocation = @$;
             i->id->identifier = edecl->typeName;
             i->id->stype = IdExpression::CONSTRUCTOR;
-
-            auto e = MkNode<FunctionDeclarator>(); e->srcLocation = @$;
-            e->retType = std::move(i);
-            e->params = $3;
+            i->Append(std::move(e));
 
             $$ = MkNode<FunctionDefinition>(); $$->srcLocation = @$;
             $$->declarator = std::move(e);
@@ -1533,14 +1542,14 @@ member_declaration:
                 || edecl->typeName != pc.CurLocalScopeName())
                 throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
 
+            auto f = MkNode<FunctionDeclarator>(); f->srcLocation = @$;
+            f->params = $3;
+
             auto i = MkNode<IdDeclarator>(); i->srcLocation = @$;
             i->id = MkNode<IdExpression>(); i->id->srcLocation = @$;
             i->id->identifier = edecl->typeName;
             i->id->stype = IdExpression::CONSTRUCTOR;
-
-            auto f = MkNode<FunctionDeclarator>(); f->srcLocation = @$;
-            f->retType = std::move(i);
-            f->params = $3;
+            i->Append(std::move(f));
 
             auto d = MkNode<MemberDeclarator>(); d->srcLocation = @$;
             d->decl = std::move(f);

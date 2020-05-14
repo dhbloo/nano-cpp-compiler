@@ -2,6 +2,14 @@
 
 namespace ast {
 
+void Declarator::Append(Ptr<Declarator> decl)
+{
+    if (innerDecl)
+        innerDecl->Append(std::move(decl));
+    else
+        innerDecl = std::move(decl);
+}
+
 void PtrSpecifier::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "类型指针修饰:\n";
@@ -23,11 +31,15 @@ void Declarator::Print(std::ostream &os, Indent indent) const
 {
     if (ptrSpec)
         ptrSpec->Print(os, indent);
+    if (innerDecl)
+        innerDecl->Print(os, indent);
 }
 
 void FunctionDeclarator::Print(std::ostream &os, Indent indent) const
 {
-    Declarator::Print(os, indent);
+    if (ptrSpec)
+        ptrSpec->Print(os, indent);
+
     os << indent << "函数原型: ";
     if (isFuncConst)
         os << "(成员const) ";
@@ -36,9 +48,9 @@ void FunctionDeclarator::Print(std::ostream &os, Indent indent) const
     else
         os << params.size() << " 参数\n";
 
-    if (retType) {
-        os << indent + 1 << "函数名:\n";
-        retType->Print(os, indent + 2);
+    if (innerDecl) {
+        os << indent + 1 << "函数返回声明:\n";
+        innerDecl->Print(os, indent + 2);
     }
 
     for (std::size_t i = 0; i < params.size(); i++) {
@@ -49,11 +61,13 @@ void FunctionDeclarator::Print(std::ostream &os, Indent indent) const
 
 void ArrayDeclarator::Print(std::ostream &os, Indent indent) const
 {
-    Declarator::Print(os, indent);
+    if (ptrSpec)
+        ptrSpec->Print(os, indent);
+
     os << indent << "数组:" << (size ? "\n" : " (未知大小)\n");
-    if (elemType) {
-        os << indent + 1 << "数组元素类型:\n";
-        elemType->Print(os, indent + 2);
+    if (innerDecl) {
+        os << indent + 1 << "数组元素声明:\n";
+        innerDecl->Print(os, indent + 2);
     }
     if (size) {
         os << indent + 1 << "数组大小:\n";
@@ -63,14 +77,12 @@ void ArrayDeclarator::Print(std::ostream &os, Indent indent) const
 
 void IdDeclarator::Print(std::ostream &os, Indent indent) const
 {
-    Declarator::Print(os, indent);
-    id->Print(os, indent);
-}
+    if (ptrSpec)
+        ptrSpec->Print(os, indent);
 
-void NestedDeclarator::Print(std::ostream &os, Indent indent) const
-{
-    Declarator::Print(os, indent);
-    decl->Print(os, indent);
+    id->Print(os, indent);
+    if (innerDecl)
+        innerDecl->Print(os, indent + 1);
 }
 
 void TypeId::Print(std::ostream &os, Indent indent) const

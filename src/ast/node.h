@@ -81,7 +81,6 @@ struct Declarator;
 struct FunctionDeclarator;
 struct ArrayDeclarator;
 struct IdDeclarator;
-struct NestedDeclarator;
 struct TypeId;
 struct ParameterDeclaration;
 struct FunctionDefinition;
@@ -568,14 +567,15 @@ struct PtrSpecifier : Node
 
 struct Declarator : Node
 {
-    Ptr<PtrSpecifier> ptrSpec;  // opt
+    Ptr<PtrSpecifier> ptrSpec;    // opt
+    Ptr<Declarator>   innerDecl;  // opt
 
-    void Print(std::ostream &os, Indent indent) const override;
+    void Append(Ptr<Declarator> decl);
+    void         Print(std::ostream &os, Indent indent) const override;
 };
 
 struct FunctionDeclarator : Declarator
 {
-    Ptr<Declarator>              retType;  // opt when abstract
     PtrVec<ParameterDeclaration> params;
     bool                         isFuncConst;
 
@@ -584,8 +584,7 @@ struct FunctionDeclarator : Declarator
 
 struct ArrayDeclarator : Declarator
 {
-    Ptr<Declarator> elemType;  // opt when abstract
-    Ptr<Expression> size;      // opt
+    Ptr<Expression> size;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
 };
@@ -593,13 +592,6 @@ struct ArrayDeclarator : Declarator
 struct IdDeclarator : Declarator
 {
     Ptr<IdExpression> id;
-
-    void Print(std::ostream &os, Indent indent) const override;
-};
-
-struct NestedDeclarator : Declarator
-{
-    Ptr<Declarator> decl;
 
     void Print(std::ostream &os, Indent indent) const override;
 };
