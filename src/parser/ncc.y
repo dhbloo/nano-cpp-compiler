@@ -1174,8 +1174,11 @@ init_declarator:
         }
 |   ptr_operator_list direct_declarator initializer_opt
         {
+            auto e = MkNode<Declarator>(); 
+            e->srcLocation = @$;
+            e->ptrSpec = $1;
             $$.declarator = $2;
-            $$.declarator->ptrSpec = $1;
+            $$.declarator->Append(std::move(e));
             $$.initializer = $3;
         }
 ;

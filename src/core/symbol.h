@@ -5,9 +5,13 @@
 #include <cstdint>
 #include <string>
 
-struct Symbol {
+struct TypeSymbol {
     std::string id;
-    FundType type;
 
-    std::uint32_t level;
+    
+};
+
+
+struct Symbol {
+    
 };

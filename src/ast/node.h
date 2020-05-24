@@ -571,7 +571,7 @@ struct Declarator : Node
     Ptr<Declarator>   innerDecl;  // opt
 
     void Append(Ptr<Declarator> decl);
-    void         Print(std::ostream &os, Indent indent) const override;
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct FunctionDeclarator : Declarator
