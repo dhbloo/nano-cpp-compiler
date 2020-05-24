@@ -1359,6 +1359,7 @@ function_definition:
         }
 |   decl_specifier_seq '(' parameter_declaration_list ')' ctor_initializer_opt function_body
         {
+            /* constructor forward defi hack */
             auto decl = $1;
             if (typeid(*decl->typeSpec) != typeid(ElaboratedTypeSpecifier))
                 throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
@@ -1378,7 +1379,7 @@ function_definition:
             i->Append(std::move(e));
 
             $$ = MkNode<FunctionDefinition>(); $$->srcLocation = @$;
-            $$->declarator = std::move(e);
+            $$->declarator = std::move(i);
             $$->ctorInitList = $5;
             $$->funcBody = $6;
         }
@@ -1435,9 +1436,9 @@ class_specifier:
     member_specification '}'
         { 
             $$ = $1;
-            $$->members = $4;
+            $$->memberList = $4;
             $$->MoveDefaultMember();
-            $$->members->Reverse();
+            $$->memberList->Reverse();
             pc.LeaveScope();
         }
 ;
@@ -1513,7 +1514,7 @@ forward_class_specifier:
 member_specification:
         { $$ = MkNode<MemberList>(); $$->srcLocation = @$; }
 |   member_declaration member_specification
-        { $$ = $2; $$->defaultMember.push_back($1); }
+        { $$ = $2; $$->defaultMembers.push_back($1); }
 |   access_specifier ':' member_specification
         { $$ = $3; $$->MoveDefaultTo($1); }
 |   error member_specification
@@ -1536,6 +1537,7 @@ member_declaration:
         }
 |   decl_specifier_seq '(' parameter_declaration_list ')' ';'
         {
+            /* constructor forward decl hack */
             auto decl = $1;
             if (typeid(*decl->typeSpec) != typeid(ElaboratedTypeSpecifier))
                 throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
@@ -1555,7 +1557,7 @@ member_declaration:
             i->Append(std::move(f));
 
             auto d = MkNode<MemberDeclarator>(); d->srcLocation = @$;
-            d->decl = std::move(f);
+            d->decl = std::move(i);
 
             auto e = MkNode<MemberDefinition>(); e->srcLocation = @$;
             e->decls.push_back(std::move(d));

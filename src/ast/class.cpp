@@ -7,46 +7,40 @@ namespace ast {
 void ClassSpecifier::MoveDefaultMember()
 {
     Access access = key == STRUCT ? Access::PUBLIC : Access::PRIVATE;
-    members->MoveDefaultTo(access);
+    memberList->MoveDefaultTo(access);
 }
 
 std::size_t MemberList::MemberCount() const
 {
-    return publicMember.size() + protectedMember.size() + privateMember.size();
+    return members.size();
 }
 
 void MemberList::Reverse()
 {
-    std::reverse(privateMember.begin(), privateMember.end());
-    std::reverse(protectedMember.begin(), protectedMember.end());
-    std::reverse(publicMember.begin(), publicMember.end());
+    std::reverse(members.begin(), members.end());
 }
 
 void MemberList::MoveDefaultTo(Access access)
 {
-    PtrVec<MemberDeclaration> *dst;
-
-    switch (access) {
-    case Access::PRIVATE: dst = &privateMember; break;
-    case Access::PROTECTED: dst = &protectedMember; break;
-    case Access::PUBLIC: dst = &publicMember; break;
-    default: return;
+    // set all access in default member list
+    for (auto &&m : defaultMembers) {
+        m->access = access;
     }
 
-    if (dst->empty()) {
-        *dst = std::move(defaultMember);
+    if (members.empty()) {
+        members = std::move(defaultMembers);
     }
     else {
-        dst->reserve(dst->size() + defaultMember.size());
-        std::move(defaultMember.begin(), defaultMember.end(), std::back_inserter(*dst));
-        defaultMember.clear();
+        members.reserve(members.size() + defaultMembers.size());
+        std::move(defaultMembers.begin(), defaultMembers.end(), std::back_inserter(members));
+        defaultMembers.clear();
     }
 }
 
 void ClassSpecifier::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "类定义: " << (key == CLASS ? "class" : "struct") << ", 名称: " << identifier
-       << (members->MemberCount() ? "\n" : " (空类)\n");
+       << (memberList->MemberCount() ? "\n" : " (空类)\n");
 
     if (nameSpec)
         nameSpec->Print(os, indent);
@@ -54,25 +48,24 @@ void ClassSpecifier::Print(std::ostream &os, Indent indent) const
     if (baseSpec)
         baseSpec->Print(os, indent);
 
-    if (members->MemberCount())
-        members->Print(os, indent);
+    if (memberList->MemberCount())
+        memberList->Print(os, indent);
 }
 
 void MemberList::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "类成员列表:\n";
 
-    for (std::size_t i = 0; i < publicMember.size(); i++) {
-        os << indent + 1 << "公有成员[" << i << "]: ";
-        publicMember[i]->Print(os, indent + 1);
-    }
-    for (std::size_t i = 0; i < protectedMember.size(); i++) {
-        os << indent + 1 << "保护成员[" << i << "]: ";
-        protectedMember[i]->Print(os, indent + 1);
-    }
-    for (std::size_t i = 0; i < privateMember.size(); i++) {
-        os << indent + 1 << "私有成员[" << i << "]: ";
-        privateMember[i]->Print(os, indent + 1);
+    for (std::size_t i = 0; i < members.size(); i++) {
+        os << indent + 1 << "成员[" << i << "]: ";
+        switch (members[i]->access) {
+        case Access::PRIVATE: os << "(私有)"; break;
+        case Access::PROTECTED: os << "(保护)"; break;
+        case Access::PUBLIC: os << "(公有)"; break;
+        case Access::DEFAULT: os << "(默认)"; break;
+        }
+        os << ' ';
+        members[i]->Print(os, indent + 1);
     }
 }
 

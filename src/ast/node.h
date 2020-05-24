@@ -663,7 +663,7 @@ struct ClassSpecifier : Node
     std::string        identifier;  // opt
     Ptr<BaseSpecifier> baseSpec;    // opt
 
-    Ptr<MemberList> members;
+    Ptr<MemberList> memberList;
 
     void MoveDefaultMember();
     void Print(std::ostream &os, Indent indent) const override;
@@ -671,7 +671,7 @@ struct ClassSpecifier : Node
 
 struct MemberList : Node
 {
-    PtrVec<MemberDeclaration> publicMember, protectedMember, privateMember, defaultMember;
+    PtrVec<MemberDeclaration> members, defaultMembers;
 
     std::size_t MemberCount() const;
     void        Reverse();
@@ -680,7 +680,9 @@ struct MemberList : Node
 };
 
 struct MemberDeclaration : Node
-{};
+{
+    Access access;
+};
 
 struct MemberDefinition : MemberDeclaration
 {
