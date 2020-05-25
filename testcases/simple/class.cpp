@@ -14,6 +14,7 @@ struct A
 
     void print() const;
     int  ret(int a, int b) { return x + y + a + b; }
+    int  ret(int a) const { return x + y + a; }
 
     A operator+(const A &other) const
     {

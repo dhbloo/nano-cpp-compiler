@@ -6,8 +6,8 @@ namespace ast {
 
 void ClassSpecifier::MoveDefaultMember()
 {
-    Access access = key == STRUCT ? Access::PUBLIC : Access::PRIVATE;
-    memberList->MoveDefaultTo(access);
+    Access defaultAccess = key == STRUCT ? Access::PUBLIC : Access::PRIVATE;
+    memberList->MoveDefaultTo(defaultAccess);
 }
 
 std::size_t MemberList::MemberCount() const
@@ -76,12 +76,18 @@ void MemberDefinition::Print(std::ostream &os, Indent indent) const
         declSpec->Print(os, indent + 1);
 
     for (std::size_t i = 0; i < decls.size(); i++) {
-        os << indent + 1 << "定义[" << i << "]:" << (decls[i]->isPure ? " (纯虚函数)\n" : "\n");
-        decls[i]->decl->Print(os, indent + 2);
-        if (decls[i]->constInit) {
-            os << indent + 1 << "初始化:\n";
-            decls[i]->constInit->Print(os, indent + 2);
-        }
+        os << indent + 1 << "定义[" << i << "]:";
+        decls[i]->Print(os, indent + 1);
+    }
+}
+
+void MemberDeclarator::Print(std::ostream &os, Indent indent) const
+{
+    os << (isPure ? " (纯虚函数)\n" : "\n");
+    decl->Print(os, indent + 1);
+    if (constInit) {
+        os << indent << "初始化:\n";
+        constInit->Print(os, indent + 1);
     }
 }
 

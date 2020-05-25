@@ -2,6 +2,29 @@
 
 namespace ast {
 
+FundType SimpleTypeSpecifier::GetFundType() const
+{
+    constexpr int Mask = 127;
+    FundType      ft;
+
+    switch ((int)fundTypePart & Mask) {
+    case (int)FundTypePart::VOID &  Mask: return FundType::VOID;
+    case (int)FundTypePart::BOOL &  Mask: return FundType::BOOL;
+    case (int)FundTypePart::FLOAT & Mask: return FundType::FLOAT;
+    case (int)FundTypePart::DOUBLE &Mask: return FundType::DOUBLE;
+    case (int)FundTypePart::SHORT & Mask: ft = FundType::SHORT; break;
+    case (int)FundTypePart::LONG &  Mask: ft = FundType::LONG; break;
+    case (int)FundTypePart::CHAR &  Mask: ft = FundType::CHAR; break;
+    default:
+        ft = FundType::INT;
+        std::cerr << "SimpleTypeSpecifier, default int: " << (int)ft << '\n';
+        break;
+    }
+
+    if ((int)FundTypePart::SHORT & (int)FundTypePart::UNSIGNED)
+        return FundType((int)ft + 1);
+}
+
 SyntaxStatus Combine(Ptr<DeclSpecifier> n1, Ptr<DeclSpecifier> n2, Ptr<DeclSpecifier> &out)
 {
     if (n1->isStatic && n2->isStatic)

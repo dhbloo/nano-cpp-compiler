@@ -16,13 +16,13 @@ void PtrSpecifier::Print(std::ostream &os, Indent indent) const
     for (std::size_t i = 0; i < ptrList.size(); i++) {
         os << indent + 1 << "修饰[" << i << "]: ";
         switch (ptrList[i].ptrType) {
-        case PTR: os << "指针"; break;
-        case REF: os << "引用"; break;
-        case CLASSPTR: os << "成员指针"; break;
+        case PtrType::PTR: os << "指针"; break;
+        case PtrType::REF: os << "引用"; break;
+        case PtrType::CLASSPTR: os << "成员指针"; break;
         }
-        os << (ptrList[i].isPtrConst ? " (const)\n" : "\n");
+        os << (ptrList[i].cv == CVQualifier::CONST ? " (const)\n" : "\n");
 
-        if (ptrList[i].ptrType == CLASSPTR)
+        if (ptrList[i].ptrType == PtrType::CLASSPTR)
             ptrList[i].classNameSpec->Print(os, indent + 2);
     }
 }

@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../core/operator.h"
-#include "../core/type.h"
+#include "../core/typeEnum.h"
 #include "../parser/yylocation.h"
 
 #include <cstdint>
@@ -153,7 +153,6 @@ struct SyntaxStatus
     SyntaxStatus(T msg) : error(true)
                         , msg(std::move(msg))
     {}
-    // SyntaxStatus(std::string msg) : error(true), msg(std::move(msg)) {}
 
                 operator bool() const { return error; }
     std::string moveMsg() { return std::move(msg); }
@@ -166,7 +165,7 @@ private:
 struct Node
 {
     yy::location srcLocation;
-    virtual void Print(std::ostream &os, Indent indent) const /* = 0*/ {}
+    virtual void Print(std::ostream &os, Indent indent) const = 0;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -504,6 +503,7 @@ struct SimpleTypeSpecifier : TypeSpecifier
 {
     FundTypePart fundTypePart;
 
+    FundType            GetFundType() const;
     friend SyntaxStatus Combine(Ptr<SimpleTypeSpecifier>  n1,
                                 Ptr<SimpleTypeSpecifier>  n2,
                                 Ptr<SimpleTypeSpecifier> &out);
@@ -551,12 +551,10 @@ struct EnumSpecifier : Node
 
 struct PtrSpecifier : Node
 {
-    enum PtrType { PTR, REF, CLASSPTR };
-
     struct PtrOp
     {
         PtrType            ptrType;
-        bool               isPtrConst;
+        CVQualifier        cv;
         Ptr<NameSpecifier> classNameSpec;
     };
 
@@ -697,6 +695,8 @@ struct MemberDeclarator : Node
     Ptr<Declarator> decl;
     Ptr<Expression> constInit;  // opt
     bool            isPure;
+
+    void Print(std::ostream &os, Indent indent) const override;
 };
 
 struct MemberFunction : MemberDeclaration

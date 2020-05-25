@@ -1,37 +1,50 @@
 #pragma once
 
-enum class FundTypePart {
-    VOID     = 512 | 1024 | 2048 | 0,
-    BOOL     = 512 | 1024 | 2048 | 1,
-    SHORT    = 1024 | 2,
-    INT      = 512 | 4,
-    LONG     = 1024 | 8,
-    CHAR     = 512 | 1024 | 16,
-    FLOAT    = 512 | 1024 | 2048 | 32,
-    DOUBLE   = 512 | 1024 | 2048 | 64,
-    SIGNED   = 2048 | 128,
-    UNSIGNED = 2048 | 256,
-    HASINT   = 512,
-    HASINTS  = 1024,
-    HASSIGN  = 2048
+#include "typeEnum.h"
+
+#include <string>
+#include <unordered_map>
+#include <vector>
+
+struct TypeDescriptor
+{
+    std::string typeName;  // class or enum name
 };
 
-enum class FundType {
-    VOID,
-    BOOL,
-    SHORT,
-    USHORT,
-    INT,
-    UINT,
-    LONG,
-    ULONG,
-    CHAR,
-    SCHAR,
-    UCHAR,
-    FLOAT,
-    DOUBLE
+struct Type
+{
+    struct PtrDescriptor
+    {
+        PtrType          ptrType;
+        CVQualifier      cv;
+        ClassDescriptor *classDesc;
+    };
+
+    TypeClass typeClass;
+
+    // for FUNDTYPE, CLASS, ENUM, FUNCTION (return type)
+    CVQualifier                cv;
+    std::vector<PtrDescriptor> ptrDescList;
+
+    FundType          fundType;   // for FUNDTYPE, FUNCTION (return type)
+    TypeDescriptor *  typeDesc;   // for CLASS, ENUM
+    std::vector<Type> paramList;  // for FUNCTION
 };
 
-enum class CVQualifier { NONE, CONST };
+struct ClassDescriptor : TypeDescriptor
+{
+    struct MemberDescriptor
+    {
+        Type type;
+        bool isStatic, isFuncConst, isFuncVirtual, isFuncPure;
+    };
 
-enum class Access { DEFAULT, PUBLIC, PROTECTED, PRIVATE };
+    Access                                            baseAccess;
+    ClassDescriptor *                                 baseClassDesc;
+    std::unordered_map<std::string, MemberDescriptor> memberDescs;
+};
+
+struct EnumDescriptor : TypeDescriptor
+{
+    // FundType = int
+};

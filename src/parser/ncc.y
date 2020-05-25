@@ -130,7 +130,7 @@
 %type<ast::Ptr<ast::EnumSpecifier>> enum_specifier enumerator_list
 %type<ast::EnumSpecifier::Enumerator> enumerator_definition
 %type<FundTypePart> simple_type_specifier
-%type<CVQualifier> cv_qualifier
+%type<CVQualifier> cv_qualifier cv_qualifier_opt
 
 %type<std::vector<ast::BlockDeclaration::InitDecl>> init_declarator_list
 %type<ast::BlockDeclaration::InitDecl> init_declarator
@@ -162,7 +162,7 @@
 %type<ast::Ptr<ast::OperatorFunctionId>> operator_function_id
 %type<Operator> operator
 
-%type<bool> cv_qualifier_opt pure_specifier_opt
+%type<bool> const_opt pure_specifier_opt
 %type<std::string> identifier identifier_opt enumerator typedef_name class_name enum_name
 
 %start translation_unit
@@ -1199,7 +1199,7 @@ declarator:
 direct_declarator:
     declarator_id
         { $$ = $1; }
-|   direct_declarator '(' parameter_declaration_list ')' cv_qualifier_opt
+|   direct_declarator '(' parameter_declaration_list ')' const_opt
         {
             auto e = MkNode<FunctionDeclarator>(); 
             e->srcLocation = @$;
@@ -1230,15 +1230,15 @@ ptr_operator_list:
 ptr_operator:
     '*' cv_qualifier_opt
         {
-            $$.ptrType = PtrSpecifier::PTR; 
-            $$.isPtrConst = $2;
+            $$.ptrType = PtrType::PTR; 
+            $$.cv = $2;
         }
 |   '&'
-        { $$.ptrType = PtrSpecifier::REF; }
+        { $$.ptrType = PtrType::REF; }
 |   nested_name_specifier '*' cv_qualifier_opt
         {
-            $$.ptrType = PtrSpecifier::CLASSPTR; 
-            $$.isPtrConst = $3;
+            $$.ptrType = PtrType::CLASSPTR; 
+            $$.cv = $3;
             $$.classNameSpec = $1;
             pc.PopQueryScopes();
         }
@@ -1289,7 +1289,7 @@ abstract_declarator:
 ;
 
 direct_abstract_declarator:
-    '(' parameter_declaration_list ')' cv_qualifier_opt
+    '(' parameter_declaration_list ')' const_opt
         {
             auto e = MkNode<FunctionDeclarator>(); 
             e->srcLocation = @$;
@@ -1304,7 +1304,7 @@ direct_abstract_declarator:
             e->size = $2;
             $$ = std::move(e);
         }
-|   direct_abstract_declarator '(' parameter_declaration_list ')' cv_qualifier_opt
+|   direct_abstract_declarator '(' parameter_declaration_list ')' const_opt
         {
             auto e = MkNode<FunctionDeclarator>(); 
             e->srcLocation = @$;
@@ -1795,8 +1795,12 @@ initializer_opt:                { $$ = nullptr; }
 |   initializer                 { $$ = $1; }
 ;
 
-cv_qualifier_opt:               { $$ = false; }
-|   cv_qualifier                { $$ = true; }
+cv_qualifier_opt:               { $$ = CVQualifier::NONE; }
+|   cv_qualifier                { $$ = $1; }
+;
+
+const_opt:                      { $$ = false; }
+|   CONST                       { $$ = true; }
 ;
 
 abstract_declarator_opt:        { $$ = nullptr; }
