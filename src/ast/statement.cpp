@@ -1,4 +1,13 @@
+#include "../core/semantic.h"
 #include "node.h"
+
+static const Type IntType {TypeClass::FUNDTYPE, CVQualifier::NONE, {}, {}, FundType::INT, nullptr};
+static const Type BoolType {TypeClass::FUNDTYPE,
+                            CVQualifier::NONE,
+                            {},
+                            {},
+                            FundType::BOOL,
+                            nullptr};
 
 namespace ast {
 
@@ -124,5 +133,161 @@ void DeclerationStatement::Print(std::ostream &os, Indent indent) const
     os << indent << "声明语句:\n";
     decl->Print(os, indent + 1);
 }
+
+void CaseStatement::Analysis(SemanticContext &context) const
+{
+    if (!context.stmt.isInSwitch)
+        throw new SemanticError("case statement is not in switch statement", srcLocation);
+
+    constant->Analysis(context);
+    if (!context.expr.isConstant)
+        throw new SemanticError("case expression is not an integral constant expression",
+                                srcLocation);
+
+    if (!context.type.IsConvertibleTo(IntType))
+        throw new SemanticError(context.type.Name() + " is not convertible to integral",
+                                srcLocation);
+
+    stmt->Analysis(context);
+}
+
+void DefaultStatement::Analysis(SemanticContext &context) const
+{
+    if (!context.stmt.isInSwitch)
+        throw new SemanticError("default statement is not in switch statement", srcLocation);
+
+    stmt->Analysis(context);
+}
+
+void ExpressionStatement::Analysis(SemanticContext &context) const
+{
+    expr->Analysis(context);
+}
+
+void CompoundStatement::Analysis(SemanticContext &context) const
+{
+    auto lastStmt = context.stmt;
+
+    for (const auto &stmt : stmts) {
+        try {
+            context.stmt.isInSwitch = false;
+            stmt->Analysis(context);
+        }
+        catch (SemanticError error) {
+            context.errorStream << error;
+            context.errCnt++;
+        }
+    }
+
+    context.stmt = lastStmt;
+}
+
+void IfStatement::Analysis(SemanticContext &context) const
+{
+    auto lastStmt           = context.stmt;
+    context.stmt.isInSwitch = false;
+
+    condition->Analysis(context);
+    if (!context.type.IsConvertibleTo(BoolType))
+        throw SemanticError(context.type.Name() + " is not convertible to bool", srcLocation);
+
+    trueStmt->Analysis(context);
+
+    if (falseStmt)
+        falseStmt->Analysis(context);
+
+    context.stmt = lastStmt;
+}
+
+void SwitchStatement::Analysis(SemanticContext &context) const
+{
+    auto lastStmt           = context.stmt;
+    context.stmt.isInSwitch = true;
+
+    condition->Analysis(context);
+    if (!context.type.IsConvertibleTo(IntType))
+        throw SemanticError(context.type.Name() + " is not convertible to integral", srcLocation);
+
+    stmt->Analysis(context);
+
+    context.stmt = lastStmt;
+}
+
+void WhileStatement::Analysis(SemanticContext &context) const
+{
+    auto lastStmt           = context.stmt;
+    context.stmt.isInSwitch = false;
+    context.stmt.isInLoop   = true;
+
+    condition->Analysis(context);
+    if (!context.type.IsConvertibleTo(BoolType))
+        throw SemanticError(context.type.Name() + " is not convertible to bool", srcLocation);
+
+    stmt->Analysis(context);
+
+    context.stmt = lastStmt;
+}
+
+void DoStatement::Analysis(SemanticContext &context) const
+{
+    auto lastStmt           = context.stmt;
+    context.stmt.isInSwitch = false;
+    context.stmt.isInLoop   = true;
+
+    stmt->Analysis(context);
+
+    condition->Analysis(context);
+    if (!context.type.IsConvertibleTo(BoolType))
+        throw SemanticError(context.type.Name() + " is not convertible to bool", srcLocation);
+
+    context.stmt = lastStmt;
+}
+
+void ForStatement::Analysis(SemanticContext &context) const
+{
+    auto lastStmt           = context.stmt;
+    context.stmt.isInSwitch = false;
+    context.stmt.isInLoop   = true;
+
+    if (initType == EXPR) {
+        exprInit->Analysis(context);
+    }
+    else {
+        declInit->Analysis(context);
+    }
+
+    if (condition) {
+        condition->Analysis(context);
+        if (!context.type.IsConvertibleTo(BoolType))
+            throw SemanticError(context.type.Name() + " is not convertible to bool", srcLocation);
+    }
+
+    if (iterExpr)
+        iterExpr->Analysis(context);
+
+    stmt->Analysis(context);
+
+    context.stmt = lastStmt;
+}
+
+void JumpStatement::Analysis(SemanticContext &context) const
+{
+    switch (type) {
+    case BREAK:
+        if (!context.stmt.isInLoop && !context.stmt.isInSwitch)
+            throw SemanticError("break statement not in loop or switch statement", srcLocation);
+        break;
+    case CONTINUE:
+        if (!context.stmt.isInLoop)
+            throw SemanticError("continue statement not in loop", srcLocation);
+        break;
+    default:
+        if (!context.stmt.isInFunction)
+            throw SemanticError("return statement not in function", srcLocation);
+        break;
+    }
+}
+
+void DeclerationStatement::Analysis(SemanticContext &context) const {}
 
 }  // namespace ast

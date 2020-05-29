@@ -9,6 +9,9 @@
 #include <ostream>
 #include <vector>
 
+class SymbolTable;
+struct SemanticContext;
+
 namespace ast {
 
 struct Indent;
@@ -162,10 +165,15 @@ private:
     std::string msg;
 };
 
+/* ------------------------------------------------------------------------- *
+ * 0. Node base
+ * ------------------------------------------------------------------------- */
+
 struct Node
 {
     yy::location srcLocation;
     virtual void Print(std::ostream &os, Indent indent) const = 0;
+    virtual void Analysis(SemanticContext &context) const;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -177,6 +185,7 @@ struct TranslationUnit : Node
     PtrVec<Declaration> decls;
 
     void Print(std::ostream &os, Indent indent = {}) const override;
+    void Analysis(SemanticContext &context) const override;
 };
 
 struct NameSpecifier : Node
@@ -185,6 +194,7 @@ struct NameSpecifier : Node
     bool                     isGlobal;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext &context) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -192,20 +202,15 @@ struct NameSpecifier : Node
  * ------------------------------------------------------------------------- */
 
 struct Expression : Node
-{
-    enum ValType { LVALUE, RVALUE };
-
-    virtual ValType ValueType() const { return RVALUE; };
-};
+{};
 
 struct AssignmentExpression : Expression
 {
     AssignOp        op;
     Ptr<Expression> left, right;
 
-    ValType ValueType() const override { return LVALUE; }
-
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct ConditionalExpression : Expression
@@ -213,6 +218,7 @@ struct ConditionalExpression : Expression
     Ptr<Expression> condition, trueExpr, falseExpr;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct BinaryExpression : Expression
@@ -221,6 +227,7 @@ struct BinaryExpression : Expression
     Ptr<Expression> left, right;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct CastExpression : Expression
@@ -229,6 +236,7 @@ struct CastExpression : Expression
     Ptr<Expression> expr;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct UnaryExpression : Expression
@@ -237,6 +245,7 @@ struct UnaryExpression : Expression
     Ptr<Expression> expr;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct CallExpression : Expression
@@ -245,6 +254,7 @@ struct CallExpression : Expression
     Ptr<ExpressionList> params;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct ConstructExpression : Expression
@@ -253,6 +263,7 @@ struct ConstructExpression : Expression
     Ptr<ExpressionList>          params;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct SizeofExpression : Expression
@@ -260,6 +271,7 @@ struct SizeofExpression : Expression
     Ptr<TypeId> typeId;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct NewExpression : Expression
@@ -274,6 +286,7 @@ struct PlainNew : NewExpression
     Ptr<TypeId> typeId;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct InitializableNew : NewExpression
@@ -284,6 +297,7 @@ struct InitializableNew : NewExpression
     Ptr<ExpressionList> initializer;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct DeleteExpression : Expression
@@ -292,6 +306,7 @@ struct DeleteExpression : Expression
     Ptr<Expression> expr;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct IdExpression : Expression
@@ -303,23 +318,24 @@ struct IdExpression : Expression
     SpecialType        stype;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct ThisExpression : Expression
 {
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct LiteralExpression : Expression
-{
-    ValType ValueType() const override { return LVALUE; }
-};
+{};
 
 struct IntLiteral : LiteralExpression
 {
     std::intmax_t value;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct FloatLiteral : LiteralExpression
@@ -327,6 +343,7 @@ struct FloatLiteral : LiteralExpression
     double value;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct CharLiteral : LiteralExpression
@@ -334,6 +351,7 @@ struct CharLiteral : LiteralExpression
     char value;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct StringLiteral : LiteralExpression
@@ -341,6 +359,7 @@ struct StringLiteral : LiteralExpression
     std::string value;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct BoolLiteral : LiteralExpression
@@ -348,6 +367,7 @@ struct BoolLiteral : LiteralExpression
     bool value;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct ExpressionList : Node
@@ -355,6 +375,7 @@ struct ExpressionList : Node
     PtrVec<Expression> exprList;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -370,6 +391,7 @@ struct CaseStatement : Statement
     Ptr<Statement>  stmt;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct DefaultStatement : Statement
@@ -377,6 +399,7 @@ struct DefaultStatement : Statement
     Ptr<Statement> stmt;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct ExpressionStatement : Statement
@@ -384,6 +407,7 @@ struct ExpressionStatement : Statement
     Ptr<Expression> expr;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct CompoundStatement : Statement
@@ -391,6 +415,7 @@ struct CompoundStatement : Statement
     PtrVec<Statement> stmts;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct IfStatement : Statement
@@ -400,6 +425,7 @@ struct IfStatement : Statement
     Ptr<Statement>  falseStmt;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct SwitchStatement : Statement
@@ -408,6 +434,7 @@ struct SwitchStatement : Statement
     Ptr<Statement>  stmt;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct WhileStatement : Statement
@@ -416,6 +443,7 @@ struct WhileStatement : Statement
     Ptr<Statement>  stmt;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct DoStatement : Statement
@@ -424,6 +452,7 @@ struct DoStatement : Statement
     Ptr<Statement>  stmt;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct ForStatement : Statement
@@ -440,6 +469,7 @@ struct ForStatement : Statement
     Ptr<Statement>  stmt;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct JumpStatement : Statement
@@ -450,6 +480,7 @@ struct JumpStatement : Statement
     Ptr<Expression> retExpr;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 struct DeclerationStatement : Statement
@@ -457,6 +488,7 @@ struct DeclerationStatement : Statement
     Ptr<BlockDeclaration> decl;
 
     void Print(std::ostream &os, Indent indent) const override;
+    void Analysis(SemanticContext& context) const override;
 };
 
 /* ------------------------------------------------------------------------- *

@@ -34,6 +34,7 @@
 
 %parse-param { ast::Ptr<ast::TranslationUnit>& astRoot }
 %parse-param { int& errcnt }
+%parse-param { std::ostream& errorStream }
 %param { ParseContext pc }
 
 
@@ -1832,7 +1833,7 @@ ctor_initializer_opt:           {}
 namespace yy {
 
 void parser::error(const location_type& l, const std::string& msg) {
-    std::cerr << msg << " at location " << l << '\n';
+    errorStream << msg << " at location " << l << '\n';
     errcnt++;
 }
 

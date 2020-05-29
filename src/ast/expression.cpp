@@ -1,3 +1,4 @@
+#include "../core/semantic.h"
 #include "node.h"
 
 namespace ast {
@@ -211,5 +212,123 @@ void OperatorFunctionId::Print(std::ostream &os, Indent indent) const
     os << indent << "运算符函数Id: " << OP_NAME[(int)overloadOp]
        << (isGlobal ? " (global)\n" : "\n");
 }
+
+void AssignmentExpression::Analysis(SemanticContext &context) const
+{
+    left->Analysis(context);
+    if (!context.expr.isAssignable)
+        throw SemanticError("left of expression is not assignable", srcLocation);
+
+    right->Analysis(context);
+
+    context.expr.isAssignable = true;
+}
+
+void ConditionalExpression::Analysis(SemanticContext &context) const
+{
+    condition->Analysis(context);
+
+    trueExpr->Analysis(context);
+    bool trueAssignable = context.expr.isAssignable;
+
+    falseExpr->Analysis(context);
+    bool falseAssignable = context.expr.isAssignable;
+
+    context.expr.isAssignable = trueAssignable && falseAssignable;
+}
+
+void BinaryExpression::Analysis(SemanticContext &context) const
+{
+    left->Analysis(context);
+    right->Analysis(context);
+
+    switch (op) {
+    case BinaryOp::SUBSCRIPT:
+    case BinaryOp::DOT:
+    case BinaryOp::DOTSTAR:
+    case BinaryOp::ARROW:
+    case BinaryOp::ARROWSTAR: context.expr.isAssignable = true; break;
+    default: context.expr.isAssignable = false; break;
+    }
+}
+
+void CastExpression::Analysis(SemanticContext &context) const
+{
+    expr->Analysis(context);
+}
+
+void UnaryExpression::Analysis(SemanticContext &context) const
+{
+    expr->Analysis(context);
+
+    switch (op) {
+    case UnaryOp::UNREF:
+    case UnaryOp::PREINC:
+    case UnaryOp::PREDEC: context.expr.isAssignable = true; break;
+    default: context.expr.isAssignable = false; break;
+    }
+}
+
+void CallExpression::Analysis(SemanticContext &context) const
+{
+    context.expr.isAssignable = true;
+}
+
+void ConstructExpression::Analysis(SemanticContext &context) const
+{
+    context.expr.isAssignable = true;
+}
+
+void SizeofExpression::Analysis(SemanticContext &context) const
+{
+    context.expr.isAssignable = false;
+}
+
+void PlainNew::Analysis(SemanticContext &context) const
+{
+    context.expr.isAssignable = false;
+}
+
+void DeleteExpression::Analysis(SemanticContext &context) const
+{
+    context.expr.isAssignable = false;
+}
+
+void IdExpression::Analysis(SemanticContext &context) const
+{
+    context.expr.isAssignable = true;
+}
+
+void ThisExpression::Analysis(SemanticContext &context) const
+{
+    context.expr.isAssignable = false;
+}
+
+void IntLiteral::Analysis(SemanticContext &context) const
+{
+    context.expr.isAssignable = false;
+}
+
+void FloatLiteral::Analysis(SemanticContext &context) const
+{
+    context.expr.isAssignable = false;
+}
+
+void CharLiteral::Analysis(SemanticContext &context) const
+{
+    context.expr.isAssignable = false;
+}
+
+void StringLiteral::Analysis(SemanticContext &context) const
+{
+    context.expr.isAssignable = false;
+}
+
+void BoolLiteral::Analysis(SemanticContext &context) const
+{
+    context.expr.isAssignable = false;
+}
+
+void ExpressionList::Analysis(SemanticContext &context) const {}
 
 }  // namespace ast

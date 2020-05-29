@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
     for (;;) {
         ast::Ptr<ast::TranslationUnit> root;
         int                            errcnt = 0;
-        yy::parser                     parser(root, errcnt, {});
+        yy::parser                     parser(root, errcnt, std::cerr, {});
         parser.set_debug_level(debug);
 
         if (parser() != 0 || errcnt > 0) {
