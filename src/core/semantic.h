@@ -5,30 +5,46 @@
 
 #include <ostream>
 
+enum class DeclState : std::uint8_t { NODECL, FULLDECL, LOCALDECL, MINDECL };
+
 struct SemanticContext
 {
-    std::ostream &errorStream;
-    int           errCnt;
-    SymbolTable * symtab;
+    std::ostream &            errorStream;
+    std::ostream &            outputStream;
+    int                       errCnt;
+    bool                      printAllSymtab;
+    SymbolTable *             symtab;
+    std::vector<std::string> &stringTable;
 
-    Type type;
-    // union {
+    Type                             type;
+    SymbolSet                        symbolSet;
+    Symbol                           newSymbol;
+    std::vector<Type::PtrDescriptor> ptrDescList;
+
     SymbolTable *specifiedScope;
 
     struct
     {
-        bool isAssignable;
-        bool isConstant;
-
+        bool     isAssignable;
+        bool     isConstant;
+        Constant constant;
     } expr;
 
     struct
     {
+        bool keepScope;
+        bool isSwitchLevel;
         bool isInSwitch;
         bool isInLoop;
-        bool isInFunction;
     } stmt;
-    //};
+
+    struct
+    {
+        DeclState         state;
+        bool              isFriend;
+        bool              isTypedef;
+        Symbol::Attribute symAttr;
+    } decl;
 };
 
 class SemanticError : std::runtime_error
@@ -41,7 +57,7 @@ public:
 
     friend inline std::ostream &operator<<(std::ostream &os, SemanticError err)
     {
-        return os << err.what() << " at location " << err.location << '\n';
+        return os << "error " << err.location << ": " << err.what() << '\n';
     }
 
 private:

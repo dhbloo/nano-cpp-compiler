@@ -3,12 +3,13 @@
 #include "../parser/yyparser.h"
 #include "semantic.h"
 
-Driver::Driver(std::ostream &errorStream) : errorStream(errorStream) {}
+Driver::Driver(std::ostream &errorStream) : errorStream(errorStream), globalSymtab(nullptr) {}
 
 bool Driver::Parse(bool isDebugMode)
 {
     ast.reset();
     globalSymtab.ClearAll();
+    stringTable.clear();
 
     /* Parser analysis */
 
@@ -25,7 +26,7 @@ bool Driver::Parse(bool isDebugMode)
 
     /* Semantic analysis */
 
-    SemanticContext context {errorStream, 0, &globalSymtab};
+    SemanticContext context {errorStream, std::cout, 0, false, &globalSymtab, stringTable};
     try {
         ast->Analysis(context);
 
@@ -41,4 +42,9 @@ bool Driver::Parse(bool isDebugMode)
     }
 
     return true;
+}
+
+void Driver::PrintSymbolTable(std::ostream &os) const
+{
+    globalSymtab.Print(os);
 }

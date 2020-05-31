@@ -8,9 +8,27 @@
 #include <vector>
 
 class SymbolTable;
+struct Symbol;
+union Constant;
 
 struct TypeDescriptor
 {};
+
+struct ClassDescriptor : TypeDescriptor
+{
+    std::string                  className;
+    Access                       baseAccess;
+    ClassDescriptor *            baseClassDesc;
+    std::shared_ptr<SymbolTable> memberTable;
+
+    std::string QualifiedName() const;
+};
+
+struct EnumDescriptor : TypeDescriptor
+{
+    std::string enumName;
+    // FundType = int
+};
 
 struct Type
 {
@@ -19,12 +37,17 @@ struct Type
         PtrType          ptrType;
         CVQualifier      cv;
         ClassDescriptor *classDesc;
+
+        std::string Name() const;
+        bool        operator==(const PtrDescriptor &rhs) const;
     };
 
     struct ArrayDescriptor
     {
-        int                        size;
+        std::size_t                size;
         std::vector<PtrDescriptor> ptrDescList;
+
+        bool operator==(const ArrayDescriptor &rhs) const;
     };
 
     TypeClass typeClass;
@@ -34,35 +57,29 @@ struct Type
     std::vector<PtrDescriptor>   ptrDescList;
     std::vector<ArrayDescriptor> arrayDescList;
 
-    FundType                        fundType;  // for FUNDTYPE, FUNCTION (return type)
+    FundType                        fundType;  // for FUNDTYPE
     std::shared_ptr<TypeDescriptor> typeDesc;  // for CLASS, ENUM, FUNCTION
 
     std::string Name() const;
     int         TypeSize() const;  // in bytes
-    bool        IsConvertibleTo(const Type &target);
-    bool        operator==(const Type &rhs);
-};
+    bool        IsComplete() const;
+    bool        IsConvertibleTo(const Type &target) const;
+    Constant    ConvertConstant(Constant constant, const Type &target) const;
+    bool        operator==(const Type &rhs) const;
 
-struct ClassDescriptor : TypeDescriptor
-{
-    std::string                  className;
-    Access                       baseAccess;
-    ClassDescriptor *            baseClassDesc;
-    std::shared_ptr<SymbolTable> memberTable;
-};
-
-struct EnumDescriptor : TypeDescriptor
-{
-    std::string enumName;
-    // FundType = int
+    static const Type IntType, BoolType, CharType, FloatType, StringTypeProto;
 };
 
 struct FunctionDescriptor : TypeDescriptor
 {
-    struct Parameter
+    struct Param
     {
-        Type type;
+        Symbol *symbol;
+        bool    hasDefault;
     };
 
-    std::vector<Parameter> paramList;
+    Type retType;
+
+    std::vector<Param>           paramList;
+    std::shared_ptr<SymbolTable> funcScope;
 };

@@ -1,13 +1,7 @@
 #include "../core/semantic.h"
 #include "node.h"
 
-static const Type IntType {TypeClass::FUNDTYPE, CVQualifier::NONE, {}, {}, FundType::INT, nullptr};
-static const Type BoolType {TypeClass::FUNDTYPE,
-                            CVQualifier::NONE,
-                            {},
-                            {},
-                            FundType::BOOL,
-                            nullptr};
+#include <cassert>
 
 namespace ast {
 
@@ -136,59 +130,76 @@ void DeclerationStatement::Print(std::ostream &os, Indent indent) const
 
 void CaseStatement::Analysis(SemanticContext &context) const
 {
-    if (!context.stmt.isInSwitch)
-        throw new SemanticError("case statement is not in switch statement", srcLocation);
+    if (!context.stmt.isSwitchLevel)
+        throw SemanticError("case statement is not in switch statement", srcLocation);
 
     constant->Analysis(context);
     if (!context.expr.isConstant)
-        throw new SemanticError("case expression is not an integral constant expression",
-                                srcLocation);
+        throw SemanticError("case expression is not an integral constant expression", srcLocation);
 
-    if (!context.type.IsConvertibleTo(IntType))
-        throw new SemanticError(context.type.Name() + " is not convertible to integral",
-                                srcLocation);
+    if (!context.type.IsConvertibleTo(Type::IntType))
+        throw SemanticError(context.type.Name() + " is not convertible to integral", srcLocation);
 
     stmt->Analysis(context);
 }
 
 void DefaultStatement::Analysis(SemanticContext &context) const
 {
-    if (!context.stmt.isInSwitch)
-        throw new SemanticError("default statement is not in switch statement", srcLocation);
+    if (!context.stmt.isSwitchLevel)
+        throw SemanticError("default statement is not in switch statement", srcLocation);
 
     stmt->Analysis(context);
 }
 
 void ExpressionStatement::Analysis(SemanticContext &context) const
 {
+    auto lastStmt          = context.stmt;
+    context.stmt.keepScope = false;
+
     expr->Analysis(context);
+
+    context.stmt = lastStmt;
 }
 
 void CompoundStatement::Analysis(SemanticContext &context) const
 {
-    auto lastStmt = context.stmt;
+    SymbolTable localSymtab(context.symtab);
+    auto        lastStmt = context.stmt;
+
+    // Enter new local scope
+    if (!context.stmt.keepScope)
+        context.symtab = &localSymtab;
 
     for (const auto &stmt : stmts) {
+        context.stmt.keepScope = false;
         try {
-            context.stmt.isInSwitch = false;
             stmt->Analysis(context);
         }
         catch (SemanticError error) {
             context.errorStream << error;
             context.errCnt++;
         }
+        // Restore previous stmt (when failure)
+        context.stmt = lastStmt;
     }
 
-    context.stmt = lastStmt;
+    // Leave local scope
+    if (!context.stmt.keepScope) {
+        context.symtab = context.symtab->GetParent();
+
+        if (context.printAllSymtab)
+            localSymtab.Print(context.outputStream);
+    }
 }
 
 void IfStatement::Analysis(SemanticContext &context) const
 {
-    auto lastStmt           = context.stmt;
-    context.stmt.isInSwitch = false;
+    auto lastStmt              = context.stmt;
+    context.stmt.keepScope     = false;
+    context.stmt.isSwitchLevel = false;
 
     condition->Analysis(context);
-    if (!context.type.IsConvertibleTo(BoolType))
+    if (!context.type.IsConvertibleTo(Type::BoolType))
         throw SemanticError(context.type.Name() + " is not convertible to bool", srcLocation);
 
     trueStmt->Analysis(context);
@@ -201,11 +212,13 @@ void IfStatement::Analysis(SemanticContext &context) const
 
 void SwitchStatement::Analysis(SemanticContext &context) const
 {
-    auto lastStmt           = context.stmt;
-    context.stmt.isInSwitch = true;
+    auto lastStmt              = context.stmt;
+    context.stmt.keepScope     = false;
+    context.stmt.isInSwitch    = true;
+    context.stmt.isSwitchLevel = true;
 
     condition->Analysis(context);
-    if (!context.type.IsConvertibleTo(IntType))
+    if (!context.type.IsConvertibleTo(Type::IntType))
         throw SemanticError(context.type.Name() + " is not convertible to integral", srcLocation);
 
     stmt->Analysis(context);
@@ -215,12 +228,13 @@ void SwitchStatement::Analysis(SemanticContext &context) const
 
 void WhileStatement::Analysis(SemanticContext &context) const
 {
-    auto lastStmt           = context.stmt;
-    context.stmt.isInSwitch = false;
-    context.stmt.isInLoop   = true;
+    auto lastStmt              = context.stmt;
+    context.stmt.keepScope     = false;
+    context.stmt.isSwitchLevel = false;
+    context.stmt.isInLoop      = true;
 
     condition->Analysis(context);
-    if (!context.type.IsConvertibleTo(BoolType))
+    if (!context.type.IsConvertibleTo(Type::BoolType))
         throw SemanticError(context.type.Name() + " is not convertible to bool", srcLocation);
 
     stmt->Analysis(context);
@@ -230,35 +244,44 @@ void WhileStatement::Analysis(SemanticContext &context) const
 
 void DoStatement::Analysis(SemanticContext &context) const
 {
-    auto lastStmt           = context.stmt;
-    context.stmt.isInSwitch = false;
-    context.stmt.isInLoop   = true;
-
-    stmt->Analysis(context);
+    auto lastStmt              = context.stmt;
+    context.stmt.keepScope     = false;
+    context.stmt.isSwitchLevel = false;
+    context.stmt.isInLoop      = true;
 
     condition->Analysis(context);
-    if (!context.type.IsConvertibleTo(BoolType))
+    if (!context.type.IsConvertibleTo(Type::BoolType))
         throw SemanticError(context.type.Name() + " is not convertible to bool", srcLocation);
+
+    stmt->Analysis(context);
 
     context.stmt = lastStmt;
 }
 
 void ForStatement::Analysis(SemanticContext &context) const
 {
-    auto lastStmt           = context.stmt;
-    context.stmt.isInSwitch = false;
-    context.stmt.isInLoop   = true;
+    SymbolTable localSymtab(context.symtab);
+    context.symtab = &localSymtab;
 
-    if (initType == EXPR) {
+    auto lastStmt              = context.stmt;
+    context.stmt.keepScope     = true;
+    context.stmt.isSwitchLevel = false;
+    context.stmt.isInLoop      = true;
+
+    if (initType == EXPR)
         exprInit->Analysis(context);
-    }
     else {
+        auto lastDecl      = context.decl;
+        context.decl.state = DeclState::MINDECL;
+
         declInit->Analysis(context);
+
+        context.decl = lastDecl;
     }
 
     if (condition) {
         condition->Analysis(context);
-        if (!context.type.IsConvertibleTo(BoolType))
+        if (!context.type.IsConvertibleTo(Type::BoolType))
             throw SemanticError(context.type.Name() + " is not convertible to bool", srcLocation);
     }
 
@@ -267,7 +290,8 @@ void ForStatement::Analysis(SemanticContext &context) const
 
     stmt->Analysis(context);
 
-    context.stmt = lastStmt;
+    context.stmt   = lastStmt;
+    context.symtab = context.symtab->GetParent();
 }
 
 void JumpStatement::Analysis(SemanticContext &context) const
@@ -281,13 +305,18 @@ void JumpStatement::Analysis(SemanticContext &context) const
         if (!context.stmt.isInLoop)
             throw SemanticError("continue statement not in loop", srcLocation);
         break;
-    default:
-        if (!context.stmt.isInFunction)
-            throw SemanticError("return statement not in function", srcLocation);
-        break;
+    default: retExpr->Analysis(context); break;
     }
 }
 
-void DeclerationStatement::Analysis(SemanticContext &context) const {}
+void DeclerationStatement::Analysis(SemanticContext &context) const
+{
+    auto lastDecl = context.decl;
+    context.decl  = {DeclState::LOCALDECL, false, false, {}};
+
+    decl->Analysis(context);
+
+    context.decl = lastDecl;
+}
 
 }  // namespace ast

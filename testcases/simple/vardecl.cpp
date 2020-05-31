@@ -26,13 +26,15 @@ char **ppb, *&prb = *ppb;
 
 void f(int);
 void (*p1)(int) = &f;
-void (*p2)(int) = f;
+// void (*p2)(int) = f;
 
-const int ci = 10, *pc = &ci, *const cpc = pc, **ppc;
-int ii, *p, *const cp                    = &ii;
+// const int ci = 10, *pc = &ci, *const cpc = pc, **ppc;
+// int ii, *p, *const cp                    = &ii;
 
-int (*(*fx[2])())[3];
-char *(*foo)(char *);
-char *(*(*fuu[5])(char *))[10];
-char *const (*(*const bar)[5])(int);
-char *const (* (** const(** zz[1])[2])[3])[4];
+// int (*(*fx[2])())[3];
+// char *(*foo)(char *);
+// char *(*(*fuu[5])(char *))[10];
+// char *const (*(*const bar)[5])(int);
+// char *const (* (** const(** zz[1])[2])[3])[4];
+
+//int **&* a;

@@ -52,7 +52,7 @@ private:
 
 class C : private B::D
 {
-    float  z;
+    float  z = 1.0f;
     double w;
 
 public:
@@ -71,6 +71,11 @@ class B::D::E
     B::D    d;
     B::D::F f;
 };
+
+B::operator float() const
+{
+    return 2.5f;
+}
 
 int     A::a = 10;
 A       a, *pa, **ppa;

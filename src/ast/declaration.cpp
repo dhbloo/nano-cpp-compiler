@@ -1,3 +1,4 @@
+#include "../core/semantic.h"
 #include "node.h"
 
 namespace ast {
@@ -17,12 +18,14 @@ FundType SimpleTypeSpecifier::GetFundType() const
     case (int)FundTypePart::CHAR &  Mask: ft = FundType::CHAR; break;
     default:
         ft = FundType::INT;
-        std::cerr << "SimpleTypeSpecifier, default int: " << (int)ft << '\n';
+        // std::cerr << "SimpleTypeSpecifier, default int: " << (int)ft << '\n';
         break;
     }
 
     if ((int)FundTypePart::SHORT & (int)FundTypePart::UNSIGNED)
         return FundType((int)ft + 1);
+    else
+        return ft;
 }
 
 SyntaxStatus Combine(Ptr<DeclSpecifier> n1, Ptr<DeclSpecifier> n2, Ptr<DeclSpecifier> &out)
@@ -172,9 +175,9 @@ void ElaboratedTypeSpecifier::Print(std::ostream &os, Indent indent) const
     os << indent << "详述类型描述: ";
 
     switch (typeClass) {
-    case TypeClass::CLASSNAME: os << "(类)"; break;
-    case TypeClass::ENUMNAME: os << "(枚举)"; break;
-    case TypeClass::TYPEDEFNAME: os << "(类型别名)"; break;
+    case CLASSNAME: os << "(类)"; break;
+    case ENUMNAME: os << "(枚举)"; break;
+    case TYPEDEFNAME: os << "(类型别名)"; break;
     }
 
     os << ' ' << typeName << (cv == CVQualifier::CONST ? " (const)\n" : "\n");
@@ -203,6 +206,154 @@ void EnumSpecifier::Print(std::ostream &os, Indent indent) const
         if (enumList[i].second)
             enumList[i].second->Print(os, indent + 1);
     }
+}
+
+void BlockDeclaration::Analysis(SemanticContext &context) const
+{
+    auto lastDecl = context.decl;
+
+    declSpec->Analysis(context);
+    auto savedDecl = context.decl;
+    Type decayType = context.type;
+
+    for (const auto &d : initDeclList) {
+        d.declarator->Analysis(context);
+
+        context.decl.state = DeclState::NODECL;
+
+        if (d.initializer)
+            d.initializer->Analysis(context);
+
+        context.decl = savedDecl;
+        context.type = decayType;
+    }
+
+    context.decl = lastDecl;
+}
+
+void DeclSpecifier::Analysis(SemanticContext &context) const
+{
+    if (typeSpec)
+        typeSpec->Analysis(context);
+    else
+        context.type =
+            Type {TypeClass::FUNDTYPE, CVQualifier::NONE, {}, {}, FundType::VOID, nullptr};
+
+    context.decl.symAttr = Symbol::NORMAL;
+    if (isStatic)
+        context.decl.symAttr = Symbol::Attribute(context.decl.symAttr | Symbol::STATIC);
+    if (isVirtual)
+        context.decl.symAttr = Symbol::Attribute(context.decl.symAttr | Symbol::VIRTUAL);
+
+    context.decl.isFriend  = isFriend;
+    context.decl.isTypedef = isTypedef;
+}
+
+void SimpleTypeSpecifier::Analysis(SemanticContext &context) const
+{
+    context.type = Type {TypeClass::FUNDTYPE, cv, {}, {}, GetFundType(), nullptr};
+}
+
+void ElaboratedTypeSpecifier::Analysis(SemanticContext &context) const
+{
+    SymbolTable *symtab    = context.symtab;
+    bool         qualified = false;
+
+    if (nameSpec) {
+        nameSpec->Analysis(context);
+        symtab    = context.specifiedScope;
+        qualified = true;
+    }
+
+    switch (typeClass) {
+    case CLASSNAME: {
+        auto classDesc = symtab->QueryClass(typeName, qualified);
+        if (!classDesc) {
+            if (qualified)
+                throw SemanticError("no class named '" + typeName + "' in '" + symtab->ScopeName()
+                                        + "'",
+                                    srcLocation);
+
+            // Forward declarator of CLASS
+            classDesc            = std::make_shared<ClassDescriptor>();
+            classDesc->className = typeName;
+
+            // Inject class descriptor into symbol table
+            symtab->AddClass(classDesc);
+        }
+        context.type = Type {TypeClass::CLASS, cv, {}, {}, FundType::VOID, classDesc};
+        break;
+    }
+    case ENUMNAME: {
+        auto enumDesc = symtab->QueryEnum(typeName, qualified);
+        if (!enumDesc) {
+            if (qualified)
+                throw SemanticError("no enum named '" + typeName + "' in '" + symtab->ScopeName()
+                                        + "'",
+                                    srcLocation);
+            else
+                throw SemanticError("forward declaration of enum is forbidden", srcLocation);
+        }
+
+        context.type = Type {TypeClass::ENUM, cv, {}, {}, FundType::VOID, enumDesc};
+        break;
+    }
+    default: {
+        auto pType = symtab->QueryTypedef(typeName, qualified);
+        if (!pType)
+            throw SemanticError("unknown typedef name", srcLocation);
+
+        context.type    = *pType;
+        context.type.cv = cv;
+        break;
+    }
+    }
+}
+
+void ClassTypeSpecifier::Analysis(SemanticContext &context) const
+{
+    if (context.decl.state != DeclState::FULLDECL && context.decl.state != DeclState::LOCALDECL)
+        throw SemanticError("cannot define class type here", srcLocation);
+
+    classType->Analysis(context);
+    context.type.cv = cv;
+}
+
+void EnumTypeSpecifier::Analysis(SemanticContext &context) const
+{
+    if (context.decl.state != DeclState::FULLDECL && context.decl.state != DeclState::LOCALDECL)
+        throw SemanticError("cannot define enum type here", srcLocation);
+
+    enumType->Analysis(context);
+    context.type.cv = cv;
+}
+
+void EnumSpecifier::Analysis(SemanticContext &context) const
+{
+    auto enumDesc      = std::make_shared<EnumDescriptor>();
+    enumDesc->enumName = identifier;
+
+    context.type = Type {TypeClass::ENUM, CVQualifier::NONE, {}, {}, FundType::VOID, enumDesc};
+
+    for (const auto &e : enumList) {
+        Symbol symbol {e.first, context.type, Symbol::CONSTANT};
+
+        e.second->Analysis(context);
+        if (!context.expr.isConstant)
+            throw SemanticError("enum expression is not integral constant", srcLocation);
+
+        if (!context.type.IsConvertibleTo(Type::IntType))
+            throw SemanticError(context.type.Name() + " is not convertible to integral",
+                                srcLocation);
+
+        symbol.constant = context.type.ConvertConstant(context.expr.constant, Type::IntType);
+
+        if (!context.symtab->AddSymbol(std::move(symbol)))
+            throw SemanticError("redefinition of '" + e.first + "'", srcLocation);
+    }
+
+    // Inject enum name into symbol table
+    context.symtab->AddEnum(enumDesc);
 }
 
 };  // namespace ast

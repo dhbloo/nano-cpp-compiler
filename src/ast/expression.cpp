@@ -209,8 +209,7 @@ void OperatorFunctionId::Print(std::ostream &os, Indent indent) const
         "SELFSHR", "EQ",      "NE",        "LE",      "GE",     "LOGIAND",  "LOGIOR",  "SELFINC",
         "SELFDEC", "COMMA",   "ARROWSTAR", "ARROW",   "CALL",   "SUBSCRIPT"};
 
-    os << indent << "运算符函数Id: " << OP_NAME[(int)overloadOp]
-       << (isGlobal ? " (global)\n" : "\n");
+    os << indent << "运算符函数Id: " << OP_NAME[(int)overloadOp] << "\n";
 }
 
 void AssignmentExpression::Analysis(SemanticContext &context) const
@@ -254,6 +253,7 @@ void BinaryExpression::Analysis(SemanticContext &context) const
 
 void CastExpression::Analysis(SemanticContext &context) const
 {
+    typeId->Analysis(context);
     expr->Analysis(context);
 }
 
@@ -271,32 +271,131 @@ void UnaryExpression::Analysis(SemanticContext &context) const
 
 void CallExpression::Analysis(SemanticContext &context) const
 {
+    funcExpr->Analysis(context);
+    if (params)
+        params->Analysis(context);
+
     context.expr.isAssignable = true;
 }
 
 void ConstructExpression::Analysis(SemanticContext &context) const
 {
+    type->Analysis(context);
+    if (params)
+        params->Analysis(context);
+
     context.expr.isAssignable = true;
 }
 
 void SizeofExpression::Analysis(SemanticContext &context) const
 {
+    typeId->Analysis(context);
+
     context.expr.isAssignable = false;
 }
 
 void PlainNew::Analysis(SemanticContext &context) const
 {
+    if (placement)
+        placement->Analysis(context);
+
+    typeId->Analysis(context);
+
+    context.expr.isAssignable = false;
+}
+
+void InitializableNew::Analysis(SemanticContext &context) const
+{
+    if (placement)
+        placement->Analysis(context);
+
+    typeSpec->Analysis(context);
+
+    if (ptrSpec) {
+        ptrSpec->Analysis(context);
+        context.type.ptrDescList = std::move(context.ptrDescList);
+    }
+
+    for (const auto &s : arraySizes) {
+        s->Analysis(context);
+    }
+
+    if (initializer)
+        initializer->Analysis(context);
+
     context.expr.isAssignable = false;
 }
 
 void DeleteExpression::Analysis(SemanticContext &context) const
 {
+    expr->Analysis(context);
+    // TODO: type check
+
     context.expr.isAssignable = false;
 }
 
 void IdExpression::Analysis(SemanticContext &context) const
 {
-    context.expr.isAssignable = true;
+    SymbolTable *symtab    = context.symtab;
+    bool         qualified = false;
+
+    if (nameSpec) {
+        if (context.decl.state != DeclState::NODECL)
+            throw SemanticError("declaration of " + identifier + "outside its scope", srcLocation);
+
+        nameSpec->Analysis(context);
+        symtab    = context.specifiedScope;
+        qualified = true;
+    }
+
+    // Get composed identifier
+    std::string composedId = ComposedId(context);
+
+    if (context.decl.state != DeclState::NODECL) {
+        if (context.decl.isTypedef) {
+            // Inject typename name into symbol table
+            if (!symtab->AddTypedef(composedId, context.type))
+                throw SemanticError("redeclaration of '" + composedId + "'", srcLocation);
+
+            context.symbolSet = nullptr;
+        }
+        else {
+            // Record new symbol
+            context.newSymbol = {composedId, context.type, {}};
+            context.symbolSet = &context.newSymbol;
+        }
+    }
+    else {
+        context.symbolSet = symtab->QuerySymbol(composedId, qualified);
+        if (!context.symbolSet) {
+            switch (stype) {
+            case DESTRUCTOR:
+                // TODO: gen default destructor
+                context.newSymbol = {composedId, context.type, {}};
+                break;
+            case CONSTRUCTOR:
+                // TODO: gen default constructor
+                context.newSymbol = {composedId, context.type, {}};
+                break;
+            default:
+                throw SemanticError("use of undeclared identifier '" + composedId + "'",
+                                    srcLocation);
+                break;
+            }
+            context.symbolSet = &context.newSymbol;
+        }
+    }
+
+    context.expr.isAssignable = stype == NO;
+}
+
+std::string IdExpression::ComposedId(SemanticContext &context) const
+{
+    switch (stype) {
+    case DESTRUCTOR: return "~" + identifier + "()";
+    case CONSTRUCTOR: return identifier + "()";
+    default: return identifier;
+    }
 }
 
 void ThisExpression::Analysis(SemanticContext &context) const
@@ -306,27 +405,45 @@ void ThisExpression::Analysis(SemanticContext &context) const
 
 void IntLiteral::Analysis(SemanticContext &context) const
 {
-    context.expr.isAssignable = false;
+    context.type                 = Type::IntType;
+    context.expr.constant.intVal = value;
+    context.expr.isConstant      = true;
+    context.expr.isAssignable    = false;
 }
 
 void FloatLiteral::Analysis(SemanticContext &context) const
 {
-    context.expr.isAssignable = false;
+    context.type                   = Type::FloatType;
+    context.expr.constant.floatVal = value;
+    context.expr.isConstant        = true;
+    context.expr.isAssignable      = false;
 }
 
 void CharLiteral::Analysis(SemanticContext &context) const
 {
-    context.expr.isAssignable = false;
+    context.type                  = Type::CharType;
+    context.expr.constant.charVal = value;
+    context.expr.isConstant       = true;
+    context.expr.isAssignable     = false;
 }
 
 void StringLiteral::Analysis(SemanticContext &context) const
 {
-    context.expr.isAssignable = false;
+    context.type = Type::StringTypeProto;
+    context.type.arrayDescList.push_back(Type::ArrayDescriptor {value.length() + 1, {}});
+
+    context.stringTable.push_back(value);
+    context.expr.constant.strIdx = context.stringTable.size() - 1;
+    context.expr.isConstant      = true;
+    context.expr.isAssignable    = false;
 }
 
 void BoolLiteral::Analysis(SemanticContext &context) const
 {
-    context.expr.isAssignable = false;
+    context.type                  = Type::BoolType;
+    context.expr.constant.boolVal = value;
+    context.expr.isConstant       = true;
+    context.expr.isAssignable     = false;
 }
 
 void ExpressionList::Analysis(SemanticContext &context) const {}

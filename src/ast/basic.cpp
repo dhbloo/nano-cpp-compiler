@@ -25,7 +25,14 @@ void Node::Analysis(SemanticContext &context) const {}
 void TranslationUnit::Analysis(SemanticContext &context) const
 {
     for (const auto &n : decls) {
-        n->Analysis(context);
+        context.decl = {DeclState::FULLDECL, false, false, {}};
+        try {
+            n->Analysis(context);
+        }
+        catch (SemanticError error) {
+            context.errorStream << error;
+            context.errCnt++;
+        }
     }
 }
 
@@ -40,7 +47,8 @@ void NameSpecifier::Analysis(SemanticContext &context) const
     for (const auto &p : path) {
         auto classDesc = symtab->QueryClass(p);
         if (!classDesc)
-            throw SemanticError("No " + p + " class under " + symtab->ScopeName(), srcLocation);
+            throw SemanticError("no class named '" + p + "' in '" + symtab->ScopeName() + "'",
+                                srcLocation);
 
         symtab = classDesc->memberTable.get();
     }

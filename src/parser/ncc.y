@@ -163,7 +163,7 @@
 %type<ast::Ptr<ast::OperatorFunctionId>> operator_function_id
 %type<Operator> operator
 
-%type<bool> const_opt pure_specifier_opt
+%type<bool> pure_specifier_opt
 %type<std::string> identifier identifier_opt enumerator typedef_name class_name enum_name
 
 %start translation_unit
@@ -295,8 +295,6 @@ qualified_id:
             $$->nameSpec = MkNode<NameSpecifier>(); $$->nameSpec->srcLocation = @$; 
             $$->nameSpec->isGlobal = true;
         }
-|   "::" operator_function_id
-        { auto e = $2; e->isGlobal = true; $$ = std::move(e); }
 ;
 
 nested_name_specifier:
@@ -854,7 +852,7 @@ statement_seq:
 |   statement_seq statement
         { $$ = $1; $$->stmts.push_back($2); }
 |   error ';'
-        { pc.PopQueryScopes(); }
+        { $$ = MkNode<CompoundStatement>(); $$->srcLocation = @$; pc.PopQueryScopes(); }
 |   statement_seq error ';'
         { $$ = $1; pc.PopQueryScopes(); }
 ;
@@ -1175,11 +1173,8 @@ init_declarator:
         }
 |   ptr_operator_list direct_declarator initializer_opt
         {
-            auto e = MkNode<Declarator>(); 
-            e->srcLocation = @$;
-            e->ptrSpec = $1;
             $$.declarator = $2;
-            $$.declarator->Append(std::move(e));
+            $$.declarator->ptrSpec = Merge($1, std::move($$.declarator->ptrSpec));
             $$.initializer = $3;
         }
 ;
@@ -1188,24 +1183,18 @@ declarator:
     direct_declarator
         { $$ = $1; }
 |   ptr_operator_list direct_declarator
-        {
-            auto e = MkNode<Declarator>(); 
-            e->srcLocation = @$;
-            e->ptrSpec = $1;
-            $$ = $2;
-            $$->Append(std::move(e));
-        }
+        { $$ = $2; $$->ptrSpec = Merge($1, std::move($$->ptrSpec)); }
 ;
 
 direct_declarator:
     declarator_id
         { $$ = $1; }
-|   direct_declarator '(' parameter_declaration_list ')' const_opt
+|   direct_declarator '(' parameter_declaration_list ')' cv_qualifier_opt
         {
             auto e = MkNode<FunctionDeclarator>(); 
             e->srcLocation = @$;
             e->params = $3;
-            e->isFuncConst = $5;
+            e->funcCV = $5;
             $$ = $1;
             $$->Append(std::move(e));
         }
@@ -1224,8 +1213,8 @@ direct_declarator:
 ptr_operator_list:
     ptr_operator
         { $$ = MkNode<PtrSpecifier>(); $$->srcLocation = @$; $$->ptrList.push_back($1); }
-|   ptr_operator ptr_operator_list 
-        { $$ = $2; $$->ptrList.push_back($1); }
+|   ptr_operator_list ptr_operator
+        { $$ = $1; $$->ptrList.push_back($2); }
 ;
 
 ptr_operator:
@@ -1281,21 +1270,16 @@ abstract_declarator:
 |   ptr_operator_list
         { $$ = MkNode<Declarator>(); $$->srcLocation = @$; $$->ptrSpec = $1; }
 |   ptr_operator_list direct_abstract_declarator
-        {
-            auto e = MkNode<Declarator>(); e->srcLocation = @$;
-            e->ptrSpec = $1;
-            $$ = $2;
-            $$->Append(std::move(e));
-        }
+        { $$ = $2; $$->ptrSpec = Merge($1, std::move($$->ptrSpec)); }
 ;
 
 direct_abstract_declarator:
-    '(' parameter_declaration_list ')' const_opt
+    '(' parameter_declaration_list ')' cv_qualifier_opt
         {
             auto e = MkNode<FunctionDeclarator>(); 
             e->srcLocation = @$;
             e->params = $2;
-            e->isFuncConst = $4;
+            e->funcCV = $4;
             $$ = std::move(e);
         }
 |   '[' constant_expression_opt ']'
@@ -1305,12 +1289,12 @@ direct_abstract_declarator:
             e->size = $2;
             $$ = std::move(e);
         }
-|   direct_abstract_declarator '(' parameter_declaration_list ')' const_opt
+|   direct_abstract_declarator '(' parameter_declaration_list ')' cv_qualifier_opt
         {
             auto e = MkNode<FunctionDeclarator>(); 
             e->srcLocation = @$;
             e->params = $3;
-            e->isFuncConst = $5;
+            e->funcCV = $5;
             $$ = $1;
             $$->Append(std::move(e));
         }
@@ -1357,6 +1341,20 @@ function_definition:
             $$ = MkNode<FunctionDefinition>(); $$->srcLocation = @$;
             $$->declarator = $1;
             $$->funcBody = $2;
+
+            if (typeid(*$$->declarator.get()) != typeid(FunctionDeclarator)) {
+                bool isFunc = false;
+                if (typeid(*$$->declarator.get()) == typeid(IdDeclarator)) {
+                    auto idDecl = static_cast<IdDeclarator*>($$->declarator.get());
+
+                    if (idDecl->innerDecl 
+                        && typeid(*idDecl->innerDecl) == typeid(FunctionDeclarator))
+                        isFunc = true;
+                }
+
+                if (!isFunc)
+                    throw syntax_error(@2, "expect ';' or ',' after non-function declarator");
+            }
         }
 |   decl_specifier_seq '(' parameter_declaration_list ')' ctor_initializer_opt function_body
         {
@@ -1390,6 +1388,20 @@ function_definition:
             $$->declSpec = $1;
             $$->declarator = $2;
             $$->funcBody = $3;
+
+            if (typeid(*$$->declarator.get()) != typeid(FunctionDeclarator)) {
+                bool isFunc = false;
+                if (typeid(*$$->declarator.get()) == typeid(IdDeclarator)) {
+                    auto idDecl = static_cast<IdDeclarator*>($$->declarator.get());
+
+                    if (idDecl->innerDecl 
+                        && typeid(*idDecl->innerDecl) == typeid(FunctionDeclarator))
+                        isFunc = true;
+                }
+
+                if (!isFunc)
+                    throw syntax_error(@2, "expect ';' or ',' after non-function declarator");
+            }
         }
 ;
 
@@ -1798,10 +1810,6 @@ initializer_opt:                { $$ = nullptr; }
 
 cv_qualifier_opt:               { $$ = CVQualifier::NONE; }
 |   cv_qualifier                { $$ = $1; }
-;
-
-const_opt:                      { $$ = false; }
-|   CONST                       { $$ = true; }
 ;
 
 abstract_declarator_opt:        { $$ = nullptr; }
