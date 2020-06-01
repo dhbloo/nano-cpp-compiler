@@ -1,45 +1,51 @@
 CXX = g++ -std=c++11 -O0 -g
 
-yyparser: src/parser/ncc.y
+CORE_SRC = driver symbol type
+AST_SRC = basic expression declaration class statement declarator
+
+OBJ_DIR = bin
+OBJ = $(CORE_SRC:%=$(OBJ_DIR)/%.o) \
+	$(AST_SRC:%=$(OBJ_DIR)/ast_%.o) \
+	$(AST_SRC:%=$(OBJ_DIR)/sem_%.o)
+YY = $(OBJ_DIR)/yylexer.o $(OBJ_DIR)/yyparser.o $(OBJ_DIR)/context.o
+
+$(OBJ_DIR)/yyparser.o: src/parser/ncc.y
 	cd src/parser && bison ncc.y --report=state
-	$(CXX) -c -o bin/yyparser.o src/parser/yyparser.cpp
-	$(CXX) -c -o bin/context.o src/parser/context.cpp
+	$(CXX) -c -o $(OBJ_DIR)/yyparser.o src/parser/yyparser.cpp
 
-yylexer: src/lexer/ncc.l yyparser
+$(OBJ_DIR)/yylexer.o: src/lexer/ncc.l $(OBJ_DIR)/yyparser.o
 	cd src/lexer && flex ncc.l
-	$(CXX) -c -o bin/yylexer.o src/lexer/yylexer.cpp
+	$(CXX) -c -o $(OBJ_DIR)/yylexer.o src/lexer/yylexer.cpp
 
-ast: yyparser src/ast/node.h src/ast/basic.cpp src/ast/expression.cpp src/ast/declaration.cpp \
-		src/ast/class.cpp src/ast/statement.cpp src/ast/declarator.cpp
-	$(CXX) -c -o bin/ast_basic.o src/ast/basic.cpp
-	$(CXX) -c -o bin/ast_expression.o src/ast/expression.cpp
-	$(CXX) -c -o bin/ast_declaration.o src/ast/declaration.cpp
-	$(CXX) -c -o bin/ast_declarator.o src/ast/declarator.cpp
-	$(CXX) -c -o bin/ast_class.o src/ast/class.cpp
-	$(CXX) -c -o bin/ast_statement.o src/ast/statement.cpp
+$(OBJ_DIR)/context.o: src/parser/context.cpp src/parser/context.h
+	$(CXX) -c -o $(OBJ_DIR)/context.o src/parser/context.cpp
 
-core: src/core/driver.cpp src/core/symbol.cpp src/core/type.cpp
-	$(CXX) -c -o bin/driver.o src/core/driver.cpp
-	$(CXX) -c -o bin/symbol.o src/core/symbol.cpp
-	$(CXX) -c -o bin/type.o src/core/type.cpp
+$(OBJ_DIR)/%.o: src/core/%.cpp
+	$(CXX) -c -o $@ $<
 
-lextest: yylexer yyparser ast
-	$(CXX) -o bin/lextest.exe src/lexer/lextest.cpp bin/yylexer.o bin/yyparser.o \
-		bin/context.o bin/ast_basic.o bin/ast_expression.o bin/ast_declaration.o \
-		bin/ast_class.o bin/ast_statement.o bin/ast_declarator.o
+$(OBJ_DIR)/ast_%.o: src/ast/%.cpp $(OBJ_DIR)/yyparser.o src/ast/node.h
+	$(CXX) -c -o $@ $<
 
-parsetest: yylexer yyparser ast core src/parser/parsetest.cpp
-	$(CXX) -o bin/parsetest.exe src/parser/parsetest.cpp bin/yylexer.o bin/yyparser.o \
-		bin/context.o bin/ast_basic.o bin/ast_expression.o bin/ast_declaration.o \
-		bin/ast_class.o bin/ast_statement.o bin/ast_declarator.o \
-		bin/driver.o bin/symbol.o bin/type.o
+$(OBJ_DIR)/sem_%.o: src/semantic/%.cpp $(OBJ_DIR)/yyparser.o src/ast/node.h
+	$(CXX) -c -o $@ $<
 
-semantic: yylexer yyparser ast core src/core/ncc.cpp
-	$(CXX) -o bin/ncc.exe src/core/ncc.cpp bin/yylexer.o bin/yyparser.o \
-		bin/context.o bin/ast_basic.o bin/ast_expression.o bin/ast_declaration.o \
-		bin/ast_class.o bin/ast_statement.o bin/ast_declarator.o \
-		bin/driver.o bin/symbol.o bin/type.o
+$(OBJ_DIR)/lextest.exe: $(YY) $(OBJ) src/lexer/lextest.cpp
+	$(CXX) -o $@ $<
+
+$(OBJ_DIR)/parsetest.exe: $(YY) $(OBJ) src/parser/parsetest.cpp
+	$(CXX) -o $@ $<
+
+$(OBJ_DIR)/ncc.exe: $(YY) $(OBJ) src/core/ncc.cpp
+	$(CXX) -o $@ $<
+
+.PHONY: clean
+
+lextest: $(OBJ_DIR)/lextest.exe
+
+parsetest: $(OBJ_DIR)/parsetest.exe
+
+ncc: $(OBJ_DIR)/ncc.exe
 
 clean:
-	rm bin/*.o
-	rm bin/*.exe
+	-rm $(OBJ_DIR)/*.o
+	-rm $(OBJ_DIR)/*.exe

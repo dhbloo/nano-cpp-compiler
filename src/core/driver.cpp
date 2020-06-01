@@ -13,31 +13,29 @@ bool Driver::Parse(bool isDebugMode)
 
     /* Parser analysis */
 
-    int        parseErrcnt = 0;
-    yy::parser parser(ast, parseErrcnt, errorStream, {});
+    int        errCnt = 0;
+    yy::parser parser(ast, errCnt, errorStream, {});
 
     // parser.set_debug_level(isDebugMode);
-    parseErrcnt += parser() != 0;
+    errCnt += parser() != 0;
 
-    if (parseErrcnt > 0) {
-        errorStream << "parsing failed, " << parseErrcnt << " error generated!\n";
+    if (errCnt > 0) {
+        errorStream << "parsing failed, " << errCnt << " error generated!\n";
         return false;
     }
 
     /* Semantic analysis */
 
-    SemanticContext context {errorStream, std::cout, 0, isDebugMode, &globalSymtab, stringTable};
-    try {
-        ast->Analysis(context);
+    SemanticContext context {errorStream,
+                             std::cout,
+                             errCnt,
+                             isDebugMode,
+                             stringTable,
+                             &globalSymtab};
+    ast->Analysis(context);
 
-        if (context.errCnt > 0) {
-            errorStream << "semantic check failed, " << context.errCnt << " error generated!\n";
-            return false;
-        }
-    }
-    catch (SemanticError error) {
-        errorStream << error;
-        errorStream << "semantic check failed, " << context.errCnt + 1 << " error generated!\n";
+    if (errCnt > 0) {
+        errorStream << "semantic check failed, " << errCnt << " error generated!\n";
         return false;
     }
 

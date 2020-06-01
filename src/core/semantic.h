@@ -11,11 +11,11 @@ struct SemanticContext
 {
     std::ostream &            errorStream;
     std::ostream &            outputStream;
-    int                       errCnt;
+    int &                     errCnt;
     bool                      printAllSymtab;
-    SymbolTable *             symtab;
     std::vector<std::string> &stringTable;
 
+    SymbolTable *                    symtab;
     Type                             type;
     SymbolSet                        symbolSet;
     Symbol                           newSymbol;

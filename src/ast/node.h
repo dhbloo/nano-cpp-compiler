@@ -9,7 +9,6 @@
 #include <ostream>
 #include <vector>
 
-class SymbolTable;
 struct SemanticContext;
 
 namespace ast {

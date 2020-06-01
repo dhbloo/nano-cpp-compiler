@@ -1,4 +1,3 @@
-#include "../core/semantic.h"
 #include "node.h"
 
 namespace ast {
@@ -18,40 +17,6 @@ void NameSpecifier::Print(std::ostream &os, Indent indent) const
     os << indent << "名称限定: " << (isGlobal ? "(全局)\n" : "\n");
     for (std::size_t i = 0; i < path.size(); i++)
         os << indent + 1 << "路径[" << i << "]: " << path[i] << '\n';
-}
-
-void Node::Analysis(SemanticContext &context) const {}
-
-void TranslationUnit::Analysis(SemanticContext &context) const
-{
-    for (const auto &n : decls) {
-        context.decl = {DeclState::FULLDECL, false, false, {}};
-        try {
-            n->Analysis(context);
-        }
-        catch (SemanticError error) {
-            context.errorStream << error;
-            context.errCnt++;
-        }
-    }
-}
-
-void NameSpecifier::Analysis(SemanticContext &context) const
-{
-    SymbolTable *&symtab = context.specifiedScope;
-    symtab               = context.symtab;
-
-    if (isGlobal)
-        symtab = symtab->GetRoot();
-
-    for (const auto &p : path) {
-        auto classDesc = symtab->QueryClass(p);
-        if (!classDesc)
-            throw SemanticError("no class named '" + p + "' in '" + symtab->ScopeName() + "'",
-                                srcLocation);
-
-        symtab = classDesc->memberTable.get();
-    }
 }
 
 }  // namespace ast

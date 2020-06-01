@@ -1457,7 +1457,13 @@ class_specifier:
 ;
 
 class_head:
-    class_key identifier base_clause_opt
+    class_key base_clause_opt
+        {
+            $$ = MkNode<ClassSpecifier>(); $$->srcLocation = @$;
+            $$->key = $1;
+            $$->baseSpec = $2;
+        }
+|   class_key identifier base_clause_opt
         {
             $$ = MkNode<ClassSpecifier>(); $$->srcLocation = @$;
             $$->key = $1;

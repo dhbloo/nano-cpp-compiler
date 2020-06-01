@@ -231,7 +231,7 @@ std::string SymbolTable::ScopeName() const
 int SymbolTable::ScopeLevel() const
 {
     int level = 0;
-    for (const SymbolTable *symtab = this; symtab; symtab = symtab->parent) {
+    for (const SymbolTable *symtab = parent; symtab; symtab = symtab->parent) {
         level++;
     }
     return level;

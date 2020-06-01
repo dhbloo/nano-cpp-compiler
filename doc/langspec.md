@@ -23,7 +23,7 @@ Nano-cpp是C++的一个语言子集，该子集涵盖了C++的部分基本特性
 + 可变参数
 + 条件内局部声明
 
-特别的，为了进一步简化实现，仅支持单文件编译，因此以下语言特性也一并去除：
+特别的，为了进一步简化实现，仅支持单文件编译（多文件编译作为后续扩展功能实现），因此以下语言特性也一并去除：
 
 + 头文件引用
 + 预处理宏
@@ -534,6 +534,7 @@ class-specifier:
 	class-head '{' [member-specification] '}'
 
 class-head:
+    class-key [base-clause]
     class-key [nested-name-specifier] identifier [base-clause]
 
 class-key:
