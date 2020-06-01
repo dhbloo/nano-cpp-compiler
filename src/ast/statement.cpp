@@ -292,6 +292,9 @@ void ForStatement::Analysis(SemanticContext &context) const
 
     context.stmt   = lastStmt;
     context.symtab = context.symtab->GetParent();
+
+    if (context.printAllSymtab)
+        localSymtab.Print(context.outputStream);
 }
 
 void JumpStatement::Analysis(SemanticContext &context) const
@@ -305,7 +308,25 @@ void JumpStatement::Analysis(SemanticContext &context) const
         if (!context.stmt.isInLoop)
             throw SemanticError("continue statement not in loop", srcLocation);
         break;
-    default: retExpr->Analysis(context); break;
+    default:
+        Type &retType = context.symtab->GetFunction()->retType;
+        if (retExpr) {
+            if (retType.typeClass == TypeClass::FUNDTYPE && retType.fundType == FundType::VOID)
+                throw SemanticError("void function should not return a value", srcLocation);
+
+            retExpr->Analysis(context);
+            // TODO: check return type match func type
+            if (!context.type.IsConvertibleTo(retType))
+                throw SemanticError("connot convert type '" + context.type.Name()
+                                        + "' to function return type '" + retType.Name() + "'",
+                                    srcLocation);
+        }
+        else {
+            if (retType.typeClass != TypeClass::FUNDTYPE || retType.fundType != FundType::VOID)
+                throw SemanticError("non-void function should return a value", srcLocation);
+        }
+
+        break;
     }
 }
 

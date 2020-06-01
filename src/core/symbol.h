@@ -17,12 +17,17 @@ union Constant {
 struct Symbol
 {
     enum Attribute {
-        NORMAL = 0,
+        NORMAL,
+        STATIC,
+        VIRTUAL,
+        PUREVIRTUAL,
+        CONSTANT,
 
-        STATIC   = 1,
-        VIRTUAL  = 2,
-        PURE     = 4,
-        CONSTANT = 8
+        PUBLIC     = 8,
+        PRIVATE    = 16,
+        PROTECTED  = 32,
+        FRIEND     = 64,
+        ACCESSMASK = PUBLIC | PRIVATE | PROTECTED | FRIEND,
     };
 
     std::string id;
@@ -51,7 +56,8 @@ struct SymbolSet
     SymbolSet();
     SymbolSet(Symbol *symbol);
     SymbolSet(std::pair<It, It> symbols);
-    Symbol *Get();
+    Symbol *    Get();
+    std::size_t Count() const;
 
     operator bool() const;
 };
@@ -59,7 +65,9 @@ struct SymbolSet
 class SymbolTable
 {
 public:
-    SymbolTable(SymbolTable *parent);
+    SymbolTable(SymbolTable *       parent,
+                ClassDescriptor *   classDesc = nullptr,
+                FunctionDescriptor *funcDesc  = nullptr);
 
     // Remove all symbols.
     void ClearAll();
@@ -78,18 +86,20 @@ public:
     std::shared_ptr<EnumDescriptor>  QueryEnum(std::string id, bool qualified = false);
     Type *                           QueryTypedef(std::string id, bool qualified = false);
 
-    SymbolTable *    GetParent();
-    SymbolTable *    GetRoot();
-    ClassDescriptor *GetClass();
-    std::string      ScopeName() const;
-    int              ScopeLevel() const;
-    int              ScopeSize() const;  // in bytes
+    SymbolTable *       GetParent();
+    SymbolTable *       GetRoot();
+    ClassDescriptor *   GetClass();
+    FunctionDescriptor *GetFunction();
+    std::string         ScopeName() const;
+    int                 ScopeLevel() const;
+    int                 ScopeSize() const;  // in bytes
 
     void Print(std::ostream &os) const;
 
 private:
     SymbolTable *                                                     parent;
-    ClassDescriptor *                                                 asscioatedClass;
+    ClassDescriptor *                                                 classDesc;
+    FunctionDescriptor *                                              funcDesc;
     std::unordered_multimap<std::string, Symbol>                      symbols;
     std::unordered_map<std::string, std::shared_ptr<ClassDescriptor>> classTypes;
     std::unordered_map<std::string, std::shared_ptr<EnumDescriptor>>  enumTypes;

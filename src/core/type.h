@@ -60,12 +60,13 @@ struct Type
     FundType                        fundType;  // for FUNDTYPE
     std::shared_ptr<TypeDescriptor> typeDesc;  // for CLASS, ENUM, FUNCTION
 
-    std::string Name() const;
+    std::string Name(std::string innerName = "") const;
     int         TypeSize() const;  // in bytes
     bool        IsComplete() const;
     bool        IsConvertibleTo(const Type &target) const;
     Constant    ConvertConstant(Constant constant, const Type &target) const;
     bool        operator==(const Type &rhs) const;
+    bool        operator!=(const Type &rhs) const;
 
     static const Type IntType, BoolType, CharType, FloatType, StringTypeProto;
 };
@@ -78,7 +79,9 @@ struct FunctionDescriptor : TypeDescriptor
         bool    hasDefault;
     };
 
-    Type retType;
+    Type             retType;
+    bool             hasBody;
+    ClassDescriptor *friendClass;
 
     std::vector<Param>           paramList;
     std::shared_ptr<SymbolTable> funcScope;

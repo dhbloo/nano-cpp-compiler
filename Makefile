@@ -1,4 +1,4 @@
-CXX = g++ -std=c++11 -Og -g
+CXX = g++ -std=c++11 -O0 -g
 
 yyparser: src/parser/ncc.y
 	cd src/parser && bison ncc.y --report=state

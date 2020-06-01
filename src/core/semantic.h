@@ -27,6 +27,7 @@ struct SemanticContext
     {
         bool     isAssignable;
         bool     isConstant;
+        bool     qualified;
         Constant constant;
     } expr;
 
@@ -43,6 +44,7 @@ struct SemanticContext
         DeclState         state;
         bool              isFriend;
         bool              isTypedef;
+        bool              paramDecl;
         Symbol::Attribute symAttr;
     } decl;
 };

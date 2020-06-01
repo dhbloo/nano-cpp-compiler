@@ -1,11 +1,13 @@
 #include "../core/semantic.h"
 #include "node.h"
 
+#include <cassert>
+
 namespace ast {
 
 FundType SimpleTypeSpecifier::GetFundType() const
 {
-    constexpr int Mask = 127;
+    constexpr int Mask = 255 ^ 8;
     FundType      ft;
 
     switch ((int)fundTypePart & Mask) {
@@ -16,13 +18,10 @@ FundType SimpleTypeSpecifier::GetFundType() const
     case (int)FundTypePart::SHORT & Mask: ft = FundType::SHORT; break;
     case (int)FundTypePart::LONG &  Mask: ft = FundType::LONG; break;
     case (int)FundTypePart::CHAR &  Mask: ft = FundType::CHAR; break;
-    default:
-        ft = FundType::INT;
-        // std::cerr << "SimpleTypeSpecifier, default int: " << (int)ft << '\n';
-        break;
+    default: ft = FundType::INT; break;
     }
 
-    if ((int)FundTypePart::SHORT & (int)FundTypePart::UNSIGNED)
+    if ((int)fundTypePart & (int)FundTypePart::UNSIGNED)
         return FundType((int)ft + 1);
     else
         return ft;
@@ -30,25 +29,11 @@ FundType SimpleTypeSpecifier::GetFundType() const
 
 SyntaxStatus Combine(Ptr<DeclSpecifier> n1, Ptr<DeclSpecifier> n2, Ptr<DeclSpecifier> &out)
 {
-    if (n1->isStatic && n2->isStatic)
-        return "duplicate static specifier";
-    else
-        n1->isStatic = n1->isStatic || n2->isStatic;
+    if (n1->declAttr != DeclSpecifier::NONE && n2->declAttr != DeclSpecifier::NONE)
+        return "connot use more than one specifier here";
 
-    if (n1->isFriend && n2->isFriend)
-        return "duplicate friend specifier";
-    else
-        n1->isFriend = n1->isFriend || n2->isFriend;
-
-    if (n1->isVirtual && n2->isVirtual)
-        return "duplicate virtual specifier";
-    else
-        n1->isVirtual = n1->isVirtual || n2->isVirtual;
-
-    if (n1->isTypedef && n2->isTypedef)
-        return "duplicate typedef specifier";
-    else
-        n1->isTypedef = n1->isTypedef || n2->isTypedef;
+    if (n1->declAttr == DeclSpecifier::NONE)
+        n1->declAttr = n2->declAttr;
 
     if (n1->typeSpec && n2->typeSpec) {
         auto ss = Combine(std::move(n1->typeSpec), std::move(n2->typeSpec), n1->typeSpec);
@@ -126,16 +111,14 @@ void BlockDeclaration::Print(std::ostream &os, Indent indent) const
 
 void DeclSpecifier::Print(std::ostream &os, Indent indent) const
 {
-    if (isFriend || isVirtual || isTypedef || isStatic) {
+    if (declAttr != NONE) {
         os << indent << "声明描述:";
-        if (isStatic)
-            os << " (static)";
-        if (isFriend)
-            os << " (friend)";
-        if (isVirtual)
-            os << " (virtual)";
-        if (isTypedef)
-            os << " (typedef)";
+        switch (declAttr) {
+        case STATIC: os << " (static)"; break;
+        case FRIEND: os << " (friend)"; break;
+        case VIRTUAL: os << " (virtual)"; break;
+        default: os << " (typedef)"; break;
+        }
 
         os << "\n";
         if (typeSpec)
@@ -161,10 +144,10 @@ void SimpleTypeSpecifier::Print(std::ostream &os, Indent indent) const
     if (cv == CVQualifier::CONST)
         os << "(const) ";
 
-    for (int i = 0; i < sizeof(FUNDTYPEPART_NAME) / sizeof(FUNDTYPEPART_NAME[0]); i++) {
+    for (int i = 1; i <= sizeof(FUNDTYPEPART_NAME) / sizeof(FUNDTYPEPART_NAME[0]); i++) {
         int mask = 1 << i;
         if (((int)fundTypePart & mask) == mask)
-            os << FUNDTYPEPART_NAME[i] << ' ';
+            os << FUNDTYPEPART_NAME[i - 1] << ' ';
     }
 
     os << (fundTypePart == FundTypePart::VOID ? "VOID\n" : "\n");
@@ -239,14 +222,14 @@ void DeclSpecifier::Analysis(SemanticContext &context) const
         context.type =
             Type {TypeClass::FUNDTYPE, CVQualifier::NONE, {}, {}, FundType::VOID, nullptr};
 
-    context.decl.symAttr = Symbol::NORMAL;
-    if (isStatic)
-        context.decl.symAttr = Symbol::Attribute(context.decl.symAttr | Symbol::STATIC);
-    if (isVirtual)
-        context.decl.symAttr = Symbol::Attribute(context.decl.symAttr | Symbol::VIRTUAL);
+    switch (declAttr) {
+    case STATIC: context.decl.symAttr = Symbol::STATIC;
+    case VIRTUAL: context.decl.symAttr = Symbol::VIRTUAL;
+    default: context.decl.symAttr = Symbol::NORMAL;
+    }
 
-    context.decl.isFriend  = isFriend;
-    context.decl.isTypedef = isTypedef;
+    context.decl.isFriend  = declAttr == FRIEND;
+    context.decl.isTypedef = declAttr == TYPEDEF;
 }
 
 void SimpleTypeSpecifier::Analysis(SemanticContext &context) const
@@ -277,6 +260,7 @@ void ElaboratedTypeSpecifier::Analysis(SemanticContext &context) const
             // Forward declarator of CLASS
             classDesc            = std::make_shared<ClassDescriptor>();
             classDesc->className = typeName;
+            assert(classDesc->memberTable == nullptr);
 
             // Inject class descriptor into symbol table
             symtab->AddClass(classDesc);
@@ -333,20 +317,29 @@ void EnumSpecifier::Analysis(SemanticContext &context) const
     auto enumDesc      = std::make_shared<EnumDescriptor>();
     enumDesc->enumName = identifier;
 
-    context.type = Type {TypeClass::ENUM, CVQualifier::NONE, {}, {}, FundType::VOID, enumDesc};
+    Type enumType {TypeClass::ENUM, CVQualifier::NONE, {}, {}, FundType::VOID, enumDesc};
+    int  curConstant = 0;
 
     for (const auto &e : enumList) {
-        Symbol symbol {e.first, context.type, Symbol::CONSTANT};
+        Symbol symbol {e.first, enumType, Symbol::CONSTANT};
 
-        e.second->Analysis(context);
-        if (!context.expr.isConstant)
-            throw SemanticError("enum expression is not integral constant", srcLocation);
+        if (e.second) {
+            e.second->Analysis(context);
+            if (!context.expr.isConstant)
+                throw SemanticError("enum expression is not integral constant", srcLocation);
 
-        if (!context.type.IsConvertibleTo(Type::IntType))
-            throw SemanticError(context.type.Name() + " is not convertible to integral",
-                                srcLocation);
+            if (!context.type.IsConvertibleTo(Type::IntType))
+                throw SemanticError(context.type.Name() + " is not convertible to integral",
+                                    srcLocation);
 
-        symbol.constant = context.type.ConvertConstant(context.expr.constant, Type::IntType);
+            symbol.constant = context.type.ConvertConstant(context.expr.constant, Type::IntType);
+            // TODO: check constant unique
+            curConstant = symbol.constant.intVal + 1;
+        }
+        else {
+            symbol.constant.intVal = curConstant;
+            curConstant++;
+        }
 
         if (!context.symtab->AddSymbol(std::move(symbol)))
             throw SemanticError("redefinition of '" + e.first + "'", srcLocation);
@@ -354,6 +347,7 @@ void EnumSpecifier::Analysis(SemanticContext &context) const
 
     // Inject enum name into symbol table
     context.symtab->AddEnum(enumDesc);
+    context.type = enumType;
 }
 
 };  // namespace ast

@@ -516,7 +516,9 @@ struct BlockDeclaration : Declaration
 
 struct DeclSpecifier : Node
 {
-    bool               isStatic, isFriend, isVirtual, isTypedef;
+    enum DeclAttribute { NONE, STATIC, FRIEND, VIRTUAL, TYPEDEF };
+
+    DeclAttribute      declAttr;
     Ptr<TypeSpecifier> typeSpec;  // opt for constructor/destructor/conversion
 
     friend SyntaxStatus
@@ -611,6 +613,7 @@ struct Declarator : Node
     Ptr<Declarator>   innerDecl;  // opt
 
     void Append(Ptr<Declarator> decl);
+    void MergePtrSpec(Ptr<PtrSpecifier> ptrSpec);
     void Print(std::ostream &os, Indent indent) const override;
     void Analysis(SemanticContext &context) const override;
 };
@@ -734,6 +737,7 @@ struct MemberList : Node
 struct MemberDeclaration : Node
 {
     Access access;
+    void Analysis(SemanticContext &context) const override;
 };
 
 struct MemberDefinition : MemberDeclaration

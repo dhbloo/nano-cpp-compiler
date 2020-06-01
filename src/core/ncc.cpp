@@ -14,7 +14,7 @@ int main(int argc, char *argv[])
     for (;;) {
         Driver driver(std::cerr);
 
-        if (driver.Parse()) {
+        if (driver.Parse(debug)) {
             std::cout << "Parse succeed!\n";
             driver.PrintSymbolTable(std::cout);
         }

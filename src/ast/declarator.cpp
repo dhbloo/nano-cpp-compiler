@@ -28,6 +28,17 @@ void Declarator::Append(Ptr<Declarator> decl)
         innerDecl = std::move(decl);
 }
 
+void Declarator::MergePtrSpec(Ptr<PtrSpecifier> ptrSpec)
+{
+    Declarator *decl = this;
+
+    while (decl->innerDecl) {
+        decl = decl->innerDecl.get();
+    }
+
+    decl->ptrSpec = Merge(std::move(ptrSpec), std::move(decl->ptrSpec));
+}
+
 void PtrSpecifier::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "类型指针修饰:\n";
@@ -215,28 +226,32 @@ void FunctionDeclarator::Analysis(SemanticContext &context) const
     if (innerDecl)
         innerDecl->Analysis(context);
 
-    auto funcDesc = std::make_shared<FunctionDescriptor>();
-
-    // current context type is return type
-    funcDesc->retType   = context.type;
-    funcDesc->funcScope = std::make_shared<SymbolTable>(context.symtab);
-    context.symtab      = funcDesc->funcScope.get();
-
-    // function parameters
-    auto lastDecl      = context.decl;
-    context.decl.state = DeclState::MINDECL;
-    for (const auto &p : params) {
-        p->Analysis(context);
-    }
-    context.decl = lastDecl;
-
-    context.type   = Type {TypeClass::FUNCTION, funcCV, {}, {}, FundType::VOID, funcDesc};
-    context.symtab = context.symtab->GetParent();
-
     if (ptrSpec) {
         ptrSpec->Analysis(context);
         context.type.ptrDescList = std::move(context.ptrDescList);
     }
+
+    auto funcDesc = std::make_shared<FunctionDescriptor>();
+
+    // current context type is return type
+    funcDesc->retType = context.type;
+    funcDesc->hasBody = false;
+    if (context.decl.isFriend)
+        funcDesc->friendClass = context.symtab->GetClass();
+    funcDesc->funcScope = std::make_shared<SymbolTable>(context.symtab, nullptr, funcDesc.get());
+    context.symtab      = funcDesc->funcScope.get();
+
+    // function parameters
+    SemanticContext newContext(context);
+    newContext.decl.state     = DeclState::MINDECL;
+    newContext.decl.paramDecl = true;
+
+    for (const auto &p : params) {
+        p->Analysis(newContext);
+    }
+
+    context.type   = Type {TypeClass::FUNCTION, funcCV, {}, {}, FundType::VOID, funcDesc};
+    context.symtab = context.symtab->GetParent();
 }
 
 void ArrayDeclarator::Analysis(SemanticContext &context) const
@@ -244,11 +259,13 @@ void ArrayDeclarator::Analysis(SemanticContext &context) const
     if (innerDecl)
         innerDecl->Analysis(context);
 
-    auto lastDecl         = context.decl;
-    context.decl.state    = DeclState::NODECL;
     std::size_t arraySize = 0;
 
     if (size) {
+        Type arrayType     = context.type;
+        auto lastDecl      = context.decl;
+        context.decl.state = DeclState::NODECL;
+
         size->Analysis(context);
         if (!context.expr.isConstant)
             throw SemanticError("array size is not an integral constant expression", srcLocation);
@@ -262,9 +279,11 @@ void ArrayDeclarator::Analysis(SemanticContext &context) const
             throw SemanticError("array declared with non positive size", srcLocation);
         else
             arraySize = (std::size_t)val.intVal;
+
+        context.decl = lastDecl;
+        context.type = arrayType;
     }
 
-    context.decl = lastDecl;
     Type::ArrayDescriptor arrayDesc {arraySize};
 
     if (ptrSpec) {
@@ -294,15 +313,23 @@ void IdDeclarator::Analysis(SemanticContext &context) const
         context.type.ptrDescList = std::move(context.ptrDescList);
     }
 
+    if (!context.decl.paramDecl && !context.type.IsComplete())
+        throw SemanticError("variable has incomplete type '" + context.type.Name() + "'",
+                            srcLocation);
+
     id->Analysis(context);
+
+    if (context.decl.isTypedef)
+        return;
 
     SymbolTable *insymtab = context.symtab;
     if (context.decl.isFriend)
         insymtab = insymtab->GetParent();
 
     context.symbolSet = insymtab->AddSymbol(context.newSymbol);
-    if (!context.symbolSet)
+    if (!context.symbolSet) {
         throw SemanticError("redeclaration of '" + context.newSymbol.id + "'", srcLocation);
+    }
 }
 
 void TypeId::Analysis(SemanticContext &context) const
@@ -320,8 +347,7 @@ void TypeId::Analysis(SemanticContext &context) const
 
 void ParameterDeclaration::Analysis(SemanticContext &context) const
 {
-    assert(context.type.typeClass == TypeClass::FUNCTION);
-    auto funcDesc = static_cast<FunctionDescriptor *>(context.type.typeDesc.get());
+    auto funcDesc = context.symtab->GetFunction();
 
     declSpec->Analysis(context);
 
@@ -343,7 +369,15 @@ void ParameterDeclaration::Analysis(SemanticContext &context) const
 
         defaultExpr->Analysis(context);
 
-        if (!context.type.IsConvertibleTo(paramType))
+        bool passed = false;
+        if (!paramType.ptrDescList.empty()) {
+            Type removeRefT = paramType;
+            removeRefT.ptrDescList.pop_back();
+            if (removeRefT != context.type)
+                passed = true;
+        }
+
+        if (!passed && !context.type.IsConvertibleTo(paramType))
             throw SemanticError("cannot initialize '" + paramType.Name() + "' with "
                                     + context.type.Name(),
                                 srcLocation);
@@ -357,8 +391,6 @@ void ParameterDeclaration::Analysis(SemanticContext &context) const
 
 void FunctionDefinition::Analysis(SemanticContext &context) const
 {
-    auto lastDecl = context.decl;
-
     if (declSpec)
         declSpec->Analysis(context);
     else {
@@ -371,25 +403,24 @@ void FunctionDefinition::Analysis(SemanticContext &context) const
 
     // Get function descriptor
     assert(context.type.typeClass == TypeClass::FUNCTION);
-    auto funcDesc      = static_cast<FunctionDescriptor *>(context.type.typeDesc.get());
-    context.decl.state = DeclState::NODECL;
+    auto funcDesc = static_cast<FunctionDescriptor *>(context.type.typeDesc.get());
 
+    auto lastDecl      = context.decl;
+    context.decl.state = DeclState::NODECL;
     for (const auto &i : ctorInitList) {
         i->Analysis(context);
     }
+    context.decl = lastDecl;
 
     // Enter function scope
-    auto lastStmt  = context.stmt;
-    context.symtab = funcDesc->funcScope.get();
-    context.stmt   = {true, false, false, false};
+    SemanticContext newContext(context);
+    newContext.symtab = funcDesc->funcScope.get();
+    newContext.stmt   = {true, false, false, false};
 
-    funcBody->Analysis(context);
+    funcBody->Analysis(newContext);
 
     // Leave function scope
-    context.symtab = context.symtab->GetParent();
-    context.stmt   = lastStmt;
-
-    context.decl = lastDecl;
+    funcDesc->hasBody = true;
 }
 
 void AssignmentInitializer::Analysis(SemanticContext &context) const
@@ -397,6 +428,13 @@ void AssignmentInitializer::Analysis(SemanticContext &context) const
     Type varType = context.type;
 
     expr->Analysis(context);
+
+    if (!varType.ptrDescList.empty()) {
+        Type removeRefT = varType;
+        removeRefT.ptrDescList.pop_back();
+        if (removeRefT == context.type)
+            return;
+    }
 
     if (!context.type.IsConvertibleTo(varType))
         throw SemanticError("cannot initialize '" + varType.Name() + "' with "

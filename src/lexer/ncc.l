@@ -55,12 +55,12 @@ boolean_literal         "false"|"true"
 
 <INITIAL>"/*"           { BEGIN(C_COMMENT); }
 <C_COMMENT>"*/"         { BEGIN(INITIAL); }
-<C_COMMENT>\n           { }
+<C_COMMENT>\n           { yycolumn = 1; yylloc->initialize(nullptr, yylineno, yycolumn); }
 <C_COMMENT>.            { }
 <C_COMMENT><<EOF>>      { throw yy::parser::syntax_error(*yylloc, "unclosed comment"); }
 
 <INITIAL>"//"           { BEGIN(LINE_COMMENT); }
-<LINE_COMMENT>\n        { BEGIN(INITIAL); }
+<LINE_COMMENT>\n        { BEGIN(INITIAL); yycolumn = 1; yylloc->initialize(nullptr, yylineno, yycolumn); }
 <LINE_COMMENT>.         { }
 
 \#.*\n                  { throw yy::parser::syntax_error(*yylloc, "preprocessing unsupported: " + std::string(yytext, yyleng)); }

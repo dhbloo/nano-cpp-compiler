@@ -16,7 +16,7 @@ bool Driver::Parse(bool isDebugMode)
     int        parseErrcnt = 0;
     yy::parser parser(ast, parseErrcnt, errorStream, {});
 
-    parser.set_debug_level(isDebugMode);
+    // parser.set_debug_level(isDebugMode);
     parseErrcnt += parser() != 0;
 
     if (parseErrcnt > 0) {
@@ -26,7 +26,7 @@ bool Driver::Parse(bool isDebugMode)
 
     /* Semantic analysis */
 
-    SemanticContext context {errorStream, std::cout, 0, false, &globalSymtab, stringTable};
+    SemanticContext context {errorStream, std::cout, 0, isDebugMode, &globalSymtab, stringTable};
     try {
         ast->Analysis(context);
 

@@ -156,7 +156,7 @@ void ClassSpecifier::Analysis(SemanticContext &context) const
         symtab->AddClass(classDesc);
     }
 
-    classDesc->memberTable = std::make_shared<SymbolTable>(context.symtab);
+    classDesc->memberTable = std::make_shared<SymbolTable>(context.symtab, classDesc.get());
     context.symtab         = classDesc->memberTable.get();
 
     if (baseSpec)
@@ -175,6 +175,24 @@ void MemberList::Analysis(SemanticContext &context) const
     }
 }
 
+void MemberDeclaration::Analysis(SemanticContext &context) const
+{
+    assert(context.symbolSet);
+    auto &attr = context.symbolSet.Get()->attr;
+
+    if (context.decl.isFriend) {
+        attr = Symbol::Attribute(attr | Symbol::FRIEND);
+        return;
+    }
+
+    switch (access) {
+    case Access::PRIVATE: attr = Symbol::Attribute(attr | Symbol::PRIVATE); break;
+    case Access::PROTECTED: attr = Symbol::Attribute(attr | Symbol::PROTECTED); break;
+    case Access::PUBLIC: attr = Symbol::Attribute(attr | Symbol::PUBLIC); break;
+    default: break;
+    }
+}
+
 void MemberDefinition::Analysis(SemanticContext &context) const
 {
     auto lastDecl = context.decl;
@@ -187,13 +205,16 @@ void MemberDefinition::Analysis(SemanticContext &context) const
     }
 
     if (context.decl.state == DeclState::LOCALDECL)
-        throw SemanticError("static data member not allowed in local class", srcLocation);
+        throw SemanticError("static data member not allowed in local class '"
+                                + context.symtab->ScopeName() + "'",
+                            srcLocation);
 
     Type decayType = context.type;
     auto savedDecl = context.decl;
 
     for (const auto &d : decls) {
         d->Analysis(context);
+        MemberDeclaration::Analysis(context);
 
         context.type = decayType;
         context.decl = savedDecl;
@@ -204,15 +225,24 @@ void MemberDefinition::Analysis(SemanticContext &context) const
 
 void MemberDeclarator::Analysis(SemanticContext &context) const
 {
-    if (isPure)
-        context.decl.symAttr = Symbol::Attribute(context.decl.symAttr | Symbol::PURE);
+    if (isPure) {
+        if (context.decl.symAttr == Symbol::VIRTUAL)
+            context.decl.symAttr = Symbol::PUREVIRTUAL;
+        else
+            throw SemanticError("only virtual function can be declared pure", srcLocation);
+    }
 
     decl->Analysis(context);
 
     if (constInit) {
+        context.decl.state = DeclState::NODECL;
+
         Type varType = context.type;
 
         constInit->Analysis(context);
+
+        if (!context.expr.isConstant)
+            throw SemanticError("initialize expression is not constant", srcLocation);
 
         if (!context.type.IsConvertibleTo(varType))
             throw SemanticError("cannot initialize '" + varType.Name() + "' with "
@@ -224,6 +254,7 @@ void MemberDeclarator::Analysis(SemanticContext &context) const
 void MemberFunction::Analysis(SemanticContext &context) const
 {
     func->Analysis(context);
+    MemberDeclaration::Analysis(context);
 }
 
 void BaseSpecifier::Analysis(SemanticContext &context) const
@@ -239,12 +270,10 @@ void BaseSpecifier::Analysis(SemanticContext &context) const
         qualified = true;
     }
 
+    // Query base class definition
     auto baseClassDesc = symtab->QueryClass(className, qualified);
-    assert(baseClassDesc);
-    /*if (!baseClassDesc) {
-        throw SemanticError("no class named '" + className + "' in '" + symtab->ScopeName() + "'",
-                            srcLocation);
-    }*/
+    if (!baseClassDesc)
+        throw SemanticError("base class '" + className + "' has incomplete type", srcLocation);
 
     classDesc->baseClassDesc = baseClassDesc.get();
     classDesc->baseAccess    = access;

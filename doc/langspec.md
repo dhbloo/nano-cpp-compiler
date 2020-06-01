@@ -534,7 +534,6 @@ class-specifier:
 	class-head '{' [member-specification] '}'
 
 class-head:
-    class-key [base-clause]
     class-key [nested-name-specifier] identifier [base-clause]
 
 class-key:

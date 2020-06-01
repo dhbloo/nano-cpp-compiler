@@ -1,20 +1,20 @@
 #pragma once
 
 enum class FundTypePart {
-    VOID     = 512 | 1024 | 2048 | 0,
-    BOOL     = 512 | 1024 | 2048 | 1,
-    SHORT    = 1024 | 2,
-    INT      = 512 | 4,
-    LONG     = 1024 | 8,
-    CHAR     = 512 | 1024 | 16,
-    FLOAT    = 512 | 1024 | 2048 | 32,
-    DOUBLE   = 512 | 1024 | 2048 | 64,
-    SIGNED   = 2048 | 128,
-    UNSIGNED = 2048 | 256,
+    VOID     = 1024 | 2048 | 4096 | 1,
+    BOOL     = 1024 | 2048 | 4096 | 2,
+    SHORT    = 2048 | 4,
+    INT      = 1024 | 8,
+    LONG     = 2048 | 16,
+    CHAR     = 1024 | 2048 | 32,
+    FLOAT    = 1024 | 2048 | 4096 | 64,
+    DOUBLE   = 1024 | 2048 | 4096 | 128,
+    SIGNED   = 4096 | 256,
+    UNSIGNED = 4096 | 512,
 
-    HASINT   = 512,
-    HASINTS  = 1024,
-    HASSIGN  = 2048
+    HASINT  = 1024,
+    HASINTS = 2048,
+    HASSIGN = 4096
 };
 
 enum class FundType {

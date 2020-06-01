@@ -991,13 +991,13 @@ decl_specifier:
 |   function_specifier          
         { $$ = $1; }
 |   STATIC
-        { $$ = MkNode<DeclSpecifier>(); $$->srcLocation = @$; $$->isStatic = true; }
+        { $$ = MkNode<DeclSpecifier>(); $$->srcLocation = @$; $$->declAttr = DeclSpecifier::STATIC; }
 |   FRIEND
-        { $$ = MkNode<DeclSpecifier>(); $$->srcLocation = @$; $$->isFriend = true; }
+        { $$ = MkNode<DeclSpecifier>(); $$->srcLocation = @$; $$->declAttr = DeclSpecifier::FRIEND; }
 |   TYPEDEF
         { 
             $$ = MkNode<DeclSpecifier>(); $$->srcLocation = @$; 
-            $$->isTypedef = true; 
+            $$->declAttr = DeclSpecifier::TYPEDEF; 
             pc.BeginTypedef();
         }
 ;
@@ -1016,7 +1016,7 @@ decl_specifier_seq:
     
 function_specifier:
     VIRTUAL
-        { $$ = MkNode<DeclSpecifier>(); $$->srcLocation = @$; $$->isVirtual = true; }
+        { $$ = MkNode<DeclSpecifier>(); $$->srcLocation = @$; $$->declAttr = DeclSpecifier::VIRTUAL; }
 ;
 
 type_specifier:
@@ -1174,7 +1174,7 @@ init_declarator:
 |   ptr_operator_list direct_declarator initializer_opt
         {
             $$.declarator = $2;
-            $$.declarator->ptrSpec = Merge($1, std::move($$.declarator->ptrSpec));
+            $$.declarator->MergePtrSpec($1);
             $$.initializer = $3;
         }
 ;
@@ -1183,7 +1183,7 @@ declarator:
     direct_declarator
         { $$ = $1; }
 |   ptr_operator_list direct_declarator
-        { $$ = $2; $$->ptrSpec = Merge($1, std::move($$->ptrSpec)); }
+        { $$ = $2; $$->MergePtrSpec($1); }
 ;
 
 direct_declarator:
@@ -1198,7 +1198,7 @@ direct_declarator:
             $$ = $1;
             $$->Append(std::move(e));
         }
-|   direct_declarator '[' constant_expression_opt ']' 
+|   direct_declarator '[' constant_expression_opt ']'
         {
             auto e = MkNode<ArrayDeclarator>(); 
             e->srcLocation = @$;
@@ -1270,7 +1270,7 @@ abstract_declarator:
 |   ptr_operator_list
         { $$ = MkNode<Declarator>(); $$->srcLocation = @$; $$->ptrSpec = $1; }
 |   ptr_operator_list direct_abstract_declarator
-        { $$ = $2; $$->ptrSpec = Merge($1, std::move($$->ptrSpec)); }
+        { $$ = $2; $$->MergePtrSpec($1); }
 ;
 
 direct_abstract_declarator:
@@ -1457,13 +1457,7 @@ class_specifier:
 ;
 
 class_head:
-    class_key base_clause_opt
-        {
-            $$ = MkNode<ClassSpecifier>(); $$->srcLocation = @$;
-            $$->key = $1;
-            $$->baseSpec = $2;
-        }
-|   class_key identifier base_clause_opt
+    class_key identifier base_clause_opt
         {
             $$ = MkNode<ClassSpecifier>(); $$->srcLocation = @$;
             $$->key = $1;

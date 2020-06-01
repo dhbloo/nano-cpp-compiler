@@ -21,7 +21,7 @@ const Type Type::StringTypeProto {TypeClass::FUNDTYPE,
 static const int FundTypeSizeTable[] = {0, 1, 1, 1, 2, 2, 4, 4, 8, 8, 4, 8};
 static const int PointerSize         = 8;
 
-std::string Type::Name() const
+std::string Type::Name(std::string innerName) const
 {
     const char *FundTypeName[] = {"void",
                                   "bool",
@@ -36,50 +36,66 @@ std::string Type::Name() const
                                   "float",
                                   "double"};
 
+    auto AppendPtr = [](const std::string &n, const PtrDescriptor &p) {
+        std::string pName = p.Name();
+        if (!n.empty() && pName.back() == 't')
+            return n + pName + " ";
+        else
+            return n + pName;
+    };
+
     std::string name, postfix;
 
+    // type postfix
     for (const auto &p : ptrDescList) {
-        postfix += p.Name();
+        postfix = AppendPtr(postfix, p);
     }
 
-    for (const auto &a : arrayDescList) {
-        for (const auto &p : a.ptrDescList)
-            postfix = p.Name() + postfix;
-
-        if (!postfix.empty())
-            postfix = "(" + postfix + ")[" + std::to_string(a.size) + "]";
+    // inner function type name
+    if (!innerName.empty()) {
+        if (!postfix.empty() && postfix.back() == 't')
+            postfix += " " + innerName;
         else
-            postfix = postfix + "[" + std::to_string(a.size) + "]";
+            postfix += innerName;
     }
 
-    // TODO postfix
+    // array type description
+    for (auto a = arrayDescList.crbegin(); a != arrayDescList.crend(); a++) {
+        std::string arrayPrefix;
+        for (const auto &p : a->ptrDescList) {
+            arrayPrefix += p.Name();
+            if (arrayPrefix.back() == 't')
+                arrayPrefix += " ";
+        }
 
+        if (!postfix.empty() && postfix.front() != '[')
+            postfix = arrayPrefix + "(" + postfix + ")[" + std::to_string(a->size) + "]";
+        else
+            postfix = arrayPrefix + postfix + "[" + std::to_string(a->size) + "]";
+    }
+
+    // primary type
     switch (typeClass) {
     case TypeClass::FUNDTYPE:
         name = std::string(FundTypeName[(int)fundType]);
-        if (!postfix.empty()) {
-            name += postfix;
-        }
+        if (!postfix.empty())
+            name += " " + postfix;
         break;
     case TypeClass::ENUM:
         name = static_cast<EnumDescriptor *>(typeDesc.get())->enumName;
-        if (!postfix.empty()) {
-            name += postfix;
-        }
+        if (!postfix.empty())
+            name += " " + postfix;
         break;
     case TypeClass::CLASS:
         name = static_cast<ClassDescriptor *>(typeDesc.get())->className;
-        if (!postfix.empty()) {
-            name += postfix;
-        }
+        if (!postfix.empty())
+            name += " " + postfix;
         break;
     default:
         auto funcDesc = static_cast<FunctionDescriptor *>(typeDesc.get());
-        name          = funcDesc->retType.Name();
 
-        if (!postfix.empty()) {
-            name += " (" + postfix + ")";
-        }
+        if (!postfix.empty())
+            name = "(" + postfix + ")";
 
         name += "(";
         for (std::size_t i = 0; i < funcDesc->paramList.size(); i++) {
@@ -91,8 +107,13 @@ std::string Type::Name() const
 
         if (cv == CVQualifier::CONST)
             name += " const";
+
+        name = funcDesc->retType.Name(name);
         break;
     }
+
+    if (cv == CVQualifier::CONST && typeClass != TypeClass::FUNCTION)
+        name = "const " + name;
 
     return name;
 }
@@ -109,7 +130,7 @@ std::string Type::PtrDescriptor::Name() const
     }
 
     if (cv == CVQualifier::CONST)
-        name += " const";
+        name += "const";
 
     return name;
 }
@@ -179,12 +200,52 @@ bool Type::IsConvertibleTo(const Type &target) const
 {
     // Implicit conversion must be the same typeclass
     // TODO: conversion operator
-    if (typeClass != target.typeClass)
-        return false;
+    if (typeClass != target.typeClass) {
+        if (typeClass == TypeClass::ENUM && target.typeClass == TypeClass::FUNDTYPE)
+            return Type::IntType.IsConvertibleTo(target);
+        else
+            return false;
+    }
 
-    // Const cannot be convert to non-const
-    if (cv == CVQualifier::CONST && target.cv == CVQualifier::NONE)
+    if (arrayDescList != target.arrayDescList) {
+        // Const array/pointer convert to non-const array/pointer
+        if (cv == CVQualifier::CONST && target.cv == CVQualifier::NONE)
+            return false;
+
+        // T [x] -> T *
+        if (!arrayDescList.empty()) {
+            if (!target.ptrDescList.empty() && target.ptrDescList.back().ptrType != PtrType::REF) {
+                Type removeArrayT   = *this;
+                Type removePointerT = target;
+                removeArrayT.arrayDescList.pop_back();
+                removePointerT.ptrDescList.pop_back();
+                if (removeArrayT == removePointerT)
+                    return true;
+            }
+            // T [x] -> T []
+            else if (!target.arrayDescList.empty() && target.arrayDescList.back().size == 0) {
+                Type removeArrayT = *this;
+                Type removeArrayU = target;
+                removeArrayT.arrayDescList.pop_back();
+                removeArrayU.arrayDescList.pop_back();
+                if (removeArrayT == removeArrayU)
+                    return true;
+            }
+        }
+
+        // T * -> T []
+        if (!ptrDescList.empty() && ptrDescList.back().ptrType != PtrType::REF
+            && !target.arrayDescList.empty() && target.arrayDescList.back().size == 0) {
+            Type removeArrayT   = target;
+            Type removePointerT = *this;
+            removeArrayT.arrayDescList.pop_back();
+            removePointerT.ptrDescList.pop_back();
+            if (removeArrayT == removePointerT)
+                return true;
+        }
+
         return false;
+    }
 
     if (ptrDescList != target.ptrDescList) {
         // -> T
@@ -203,9 +264,11 @@ bool Type::IsConvertibleTo(const Type &target) const
 
         return false;
     }
-
-    if (arrayDescList != target.arrayDescList)
-        return false;
+    else if (!ptrDescList.empty()) {
+        // Const ref/pointer convert to non-const ref/pointer
+        if (cv == CVQualifier::CONST && target.cv == CVQualifier::NONE)
+            return false;
+    }
 
     if (typeClass == TypeClass::FUNDTYPE) {
         // implicit fundmental type conversion rules
@@ -270,6 +333,11 @@ bool Type::operator==(const Type &rhs) const
     case TypeClass::FUNCTION: return fundType == rhs.fundType && typeDesc == rhs.typeDesc;
     default: return typeDesc == rhs.typeDesc;
     }
+}
+
+bool Type::operator!=(const Type &rhs) const
+{
+    return !operator==(rhs);
 }
 
 bool Type::PtrDescriptor::operator==(const PtrDescriptor &rhs) const
