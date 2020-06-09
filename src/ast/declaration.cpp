@@ -2,7 +2,8 @@
 
 namespace ast {
 
-SyntaxStatus Combine(Ptr<DeclSpecifier> n1, Ptr<DeclSpecifier> n2, Ptr<DeclSpecifier> &out)
+SyntaxStatus
+Combine(Ptr<DeclSpecifier> n1, Ptr<DeclSpecifier> n2, Ptr<DeclSpecifier> &out)
 {
     if (n1->declAttr != DeclSpecifier::NONE && n2->declAttr != DeclSpecifier::NONE)
         return "connot use more than one specifier here";
@@ -22,9 +23,11 @@ SyntaxStatus Combine(Ptr<DeclSpecifier> n1, Ptr<DeclSpecifier> n2, Ptr<DeclSpeci
     return {};
 }
 
-SyntaxStatus Combine(Ptr<TypeSpecifier> n1, Ptr<TypeSpecifier> n2, Ptr<TypeSpecifier> &out)
+SyntaxStatus
+Combine(Ptr<TypeSpecifier> n1, Ptr<TypeSpecifier> n2, Ptr<TypeSpecifier> &out)
 {
-    if (typeid(*n1) == typeid(SimpleTypeSpecifier) && typeid(*n2) == typeid(SimpleTypeSpecifier)) {
+    if (typeid(*n1) == typeid(SimpleTypeSpecifier)
+        && typeid(*n2) == typeid(SimpleTypeSpecifier)) {
         Ptr<SimpleTypeSpecifier> t1 {static_cast<SimpleTypeSpecifier *>(n1.release())};
         Ptr<SimpleTypeSpecifier> t2 {static_cast<SimpleTypeSpecifier *>(n2.release())};
         Ptr<SimpleTypeSpecifier> tout;
@@ -34,10 +37,12 @@ SyntaxStatus Combine(Ptr<TypeSpecifier> n1, Ptr<TypeSpecifier> n2, Ptr<TypeSpeci
         if (ss)
             return ss;
     }
-    else if (typeid(*n1) == typeid(TypeSpecifier) && typeid(*n2) == typeid(TypeSpecifier)) {
+    else if (typeid(*n1) == typeid(TypeSpecifier)
+             && typeid(*n2) == typeid(TypeSpecifier)) {
         return "duplicate const specifier";
     }
-    else if (typeid(*n1) != typeid(TypeSpecifier) && typeid(*n2) != typeid(TypeSpecifier)) {
+    else if (typeid(*n1) != typeid(TypeSpecifier)
+             && typeid(*n2) != typeid(TypeSpecifier)) {
         return "more than one type are specified";
     }
     else if (typeid(*n1) == typeid(TypeSpecifier)) {
@@ -52,8 +57,9 @@ SyntaxStatus Combine(Ptr<TypeSpecifier> n1, Ptr<TypeSpecifier> n2, Ptr<TypeSpeci
     return {};
 }
 
-SyntaxStatus
-Combine(Ptr<SimpleTypeSpecifier> n1, Ptr<SimpleTypeSpecifier> n2, Ptr<SimpleTypeSpecifier> &out)
+SyntaxStatus Combine(Ptr<SimpleTypeSpecifier>  n1,
+                     Ptr<SimpleTypeSpecifier>  n2,
+                     Ptr<SimpleTypeSpecifier> &out)
 {
     if ((int)n1->fundTypePart & (int)n2->fundTypePart)
         return "cannot combine two types";
@@ -67,7 +73,8 @@ Combine(Ptr<SimpleTypeSpecifier> n1, Ptr<SimpleTypeSpecifier> n2, Ptr<SimpleType
 
 bool ElaboratedTypeSpecifier::operator==(const ElaboratedTypeSpecifier &n2)
 {
-    return nameSpec == n2.nameSpec && typeClass == n2.typeClass && typeName == n2.typeName;
+    return nameSpec == n2.nameSpec && typeClass == n2.typeClass
+           && typeName == n2.typeName;
 }
 
 void BlockDeclaration::Print(std::ostream &os, Indent indent) const
@@ -157,7 +164,8 @@ void EnumTypeSpecifier::Print(std::ostream &os, Indent indent) const
 
 void EnumSpecifier::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "枚举名: " << identifier << '\n';
+    os << indent << "枚举名: " << (identifier.empty() ? "(匿名枚举)" : identifier)
+       << '\n';
     for (std::size_t i = 0; i < enumList.size(); i++) {
         os << indent << "枚举值[" << i << "], 名称: " << enumList[i].first << '\n';
 

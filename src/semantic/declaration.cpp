@@ -29,25 +29,32 @@ FundType SimpleTypeSpecifier::GetFundType() const
 
 void BlockDeclaration::Analysis(SemanticContext &context) const
 {
-    auto lastDecl = context.decl;
+    if (context.decl.isFriend && !initDeclList.empty())
+        throw SemanticError("friends can only be classes or functions", srcLocation);
 
     declSpec->Analysis(context);
+
     auto savedDecl = context.decl;
     Type decayType = context.type;
 
+    // Restore point
     for (const auto &d : initDeclList) {
-        d.declarator->Analysis(context);
+        try {
+            d.declarator->Analysis(context);
 
-        context.decl.state = DeclState::NODECL;
-
-        if (d.initializer)
-            d.initializer->Analysis(context);
+            if (d.initializer) {
+                context.decl.state = DeclState::NODECL;
+                d.initializer->Analysis(context);
+            }
+        }
+        catch (SemanticError error) {
+            context.errorStream << error;
+            context.errCnt++;
+        }
 
         context.decl = savedDecl;
         context.type = decayType;
     }
-
-    context.decl = lastDecl;
 }
 
 void DeclSpecifier::Analysis(SemanticContext &context) const
@@ -55,13 +62,12 @@ void DeclSpecifier::Analysis(SemanticContext &context) const
     if (typeSpec)
         typeSpec->Analysis(context);
     else
-        context.type =
-            Type {TypeClass::FUNDTYPE, CVQualifier::NONE, {}, {}, FundType::VOID, nullptr};
+        context.type = {FundType::VOID};
 
     switch (declAttr) {
-    case STATIC: context.decl.symAttr = Symbol::STATIC;
-    case VIRTUAL: context.decl.symAttr = Symbol::VIRTUAL;
-    default: context.decl.symAttr = Symbol::NORMAL;
+    case STATIC: context.decl.symAttr = Symbol::STATIC; break;
+    case VIRTUAL: context.decl.symAttr = Symbol::VIRTUAL; break;
+    default: context.decl.symAttr = Symbol::NORMAL; break;
     }
 
     context.decl.isFriend  = declAttr == FRIEND;
@@ -70,7 +76,10 @@ void DeclSpecifier::Analysis(SemanticContext &context) const
 
 void SimpleTypeSpecifier::Analysis(SemanticContext &context) const
 {
-    context.type = Type {TypeClass::FUNDTYPE, cv, {}, {}, GetFundType(), nullptr};
+    if (context.decl.isFriend)
+        throw SemanticError("friends can only be classes or functions", srcLocation);
+
+    context.type = {GetFundType(), cv};
 }
 
 void ElaboratedTypeSpecifier::Analysis(SemanticContext &context) const
@@ -80,7 +89,7 @@ void ElaboratedTypeSpecifier::Analysis(SemanticContext &context) const
 
     if (nameSpec) {
         nameSpec->Analysis(context);
-        symtab    = context.specifiedScope;
+        symtab    = context.qualifiedScope;
         qualified = true;
     }
 
@@ -89,8 +98,8 @@ void ElaboratedTypeSpecifier::Analysis(SemanticContext &context) const
         auto classDesc = symtab->QueryClass(typeName, qualified);
         if (!classDesc) {
             if (qualified)
-                throw SemanticError("no class named '" + typeName + "' in '" + symtab->ScopeName()
-                                        + "'",
+                throw SemanticError("no class named '" + typeName + "' in '"
+                                        + symtab->ScopeName() + "'",
                                     srcLocation);
 
             // Forward declarator of CLASS
@@ -101,39 +110,53 @@ void ElaboratedTypeSpecifier::Analysis(SemanticContext &context) const
             // Inject class descriptor into symbol table
             symtab->AddClass(classDesc);
         }
-        context.type = Type {TypeClass::CLASS, cv, {}, {}, FundType::VOID, classDesc};
+
+        if (context.decl.isFriend)
+            classDesc->friendClassTo.push_back(context.symtab->GetCurrentClass());
+
+        context.type = {classDesc, cv};
         break;
     }
     case ENUMNAME: {
+        if (context.decl.isFriend)
+            throw SemanticError("friends can only be classes or functions", srcLocation);
+
         auto enumDesc = symtab->QueryEnum(typeName, qualified);
         if (!enumDesc) {
             if (qualified)
-                throw SemanticError("no enum named '" + typeName + "' in '" + symtab->ScopeName()
-                                        + "'",
+                throw SemanticError("no enum named '" + typeName + "' in '"
+                                        + symtab->ScopeName() + "'",
                                     srcLocation);
             else
-                throw SemanticError("forward declaration of enum is forbidden", srcLocation);
+                throw SemanticError("forward declaration of enum is forbidden",
+                                    srcLocation);
         }
 
-        context.type = Type {TypeClass::ENUM, cv, {}, {}, FundType::VOID, enumDesc};
+        context.type = {enumDesc, cv};
         break;
     }
-    default: {
+    default:
+        if (context.decl.isFriend)
+            throw SemanticError("friends can only be classes or functions", srcLocation);
+
         auto pType = symtab->QueryTypedef(typeName, qualified);
-        if (!pType)
+        if (!pType)  // might be not useful
             throw SemanticError("unknown typedef name", srcLocation);
 
         context.type    = *pType;
         context.type.cv = cv;
         break;
     }
-    }
 }
 
 void ClassTypeSpecifier::Analysis(SemanticContext &context) const
 {
-    if (context.decl.state != DeclState::FULLDECL && context.decl.state != DeclState::LOCALDECL)
+    if (context.decl.state != DeclState::FULLDECL
+        && context.decl.state != DeclState::LOCALDECL)
         throw SemanticError("cannot define class type here", srcLocation);
+
+    if (context.decl.isFriend)
+        throw SemanticError("cannot define a type in a friend declaration", srcLocation);
 
     classType->Analysis(context);
     context.type.cv = cv;
@@ -141,8 +164,12 @@ void ClassTypeSpecifier::Analysis(SemanticContext &context) const
 
 void EnumTypeSpecifier::Analysis(SemanticContext &context) const
 {
-    if (context.decl.state != DeclState::FULLDECL && context.decl.state != DeclState::LOCALDECL)
+    if (context.decl.state != DeclState::FULLDECL
+        && context.decl.state != DeclState::LOCALDECL)
         throw SemanticError("cannot define enum type here", srcLocation);
+
+    if (context.decl.isFriend)
+        throw SemanticError("cannot define a type in a friend declaration", srcLocation);
 
     enumType->Analysis(context);
     context.type.cv = cv;
@@ -152,8 +179,11 @@ void EnumSpecifier::Analysis(SemanticContext &context) const
 {
     auto enumDesc      = std::make_shared<EnumDescriptor>();
     enumDesc->enumName = identifier;
+    if (enumDesc->enumName.empty()) {
+        enumDesc->enumName = "<anonymous enum>";
+    }
 
-    Type enumType {TypeClass::ENUM, CVQualifier::NONE, {}, {}, FundType::VOID, enumDesc};
+    Type enumType {enumDesc};
     int  curConstant = 0;
 
     for (const auto &e : enumList) {
@@ -162,18 +192,20 @@ void EnumSpecifier::Analysis(SemanticContext &context) const
         if (e.second) {
             e.second->Analysis(context);
             if (!context.expr.isConstant)
-                throw SemanticError("enum expression is not integral constant", srcLocation);
-
-            if (!context.type.IsConvertibleTo(Type::IntType))
-                throw SemanticError(context.type.Name() + " is not convertible to integral",
+                throw SemanticError("enum expression is not integral constant",
                                     srcLocation);
 
-            symbol.constant = context.type.ConvertConstant(context.expr.constant, Type::IntType);
+            if (!context.type.IsConvertibleTo(FundType::INT, &context.expr.constant))
+                throw SemanticError(context.type.Name()
+                                        + " is not convertible to integral",
+                                    srcLocation);
+            
             // TODO: check constant unique
-            curConstant = symbol.constant.intVal + 1;
+            symbol.intConstant = context.expr.constant.intVal;
+            curConstant = symbol.intConstant + 1;
         }
         else {
-            symbol.constant.intVal = curConstant;
+            symbol.intConstant = curConstant;
             curConstant++;
         }
 
@@ -182,7 +214,8 @@ void EnumSpecifier::Analysis(SemanticContext &context) const
     }
 
     // Inject enum name into symbol table
-    context.symtab->AddEnum(enumDesc);
+    if (!identifier.empty())
+        context.symtab->AddEnum(enumDesc);
     context.type = enumType;
 }
 

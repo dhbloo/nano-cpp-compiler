@@ -8,44 +8,71 @@ namespace ast {
 void AssignmentExpression::Analysis(SemanticContext &context) const
 {
     left->Analysis(context);
-    if (!context.expr.isAssignable)
-        throw SemanticError("left of expression is not assignable", srcLocation);
-
     Type leftType = context.type;
 
-    right->Analysis(context);
+    if (!leftType.IsRef() || leftType.RemoveRef().IsSimple(TypeClass::FUNCTION))
+        throw SemanticError("left of expression is not assignable", srcLocation);
 
-    if (!context.type.IsConvertibleTo(leftType)) {
-        throw SemanticError("assigning to '" + leftType.Name() + "' from incompatible type '"
-                                + context.type.Name() + "'",
+    right->Analysis(context);
+    Type rightType = context.type.Decay();
+
+    if (!rightType.IsConvertibleTo(leftType.RemoveRef())) {
+        throw SemanticError("assigning to '" + leftType.RemoveRef().Name()
+                                + "' from incompatible type '" + rightType.Name() + "'",
                             srcLocation);
     }
 
-    context.type              = leftType;
-    context.expr.isAssignable = true;
+    context.type = leftType;
 }
 
 void ConditionalExpression::Analysis(SemanticContext &context) const
 {
     condition->Analysis(context);
-    if (!context.type.IsConvertibleTo(Type::BoolType))
-        throw SemanticError(context.type.Name() + " is not convertible to bool", srcLocation);
+    Type condType = context.type.Decay();
+    auto condExpr = context.expr;
+    if (!condType.IsConvertibleTo(FundType::BOOL, &condExpr.constant))
+        throw SemanticError(condType.Name() + " is not convertible to bool", srcLocation);
 
     trueExpr->Analysis(context);
-    bool trueAssignable = context.expr.isAssignable;
-    Type trueType       = context.type;
+    Type trueType = context.type;
+    auto trueExpr = context.expr;
 
     falseExpr->Analysis(context);
-    bool falseAssignable = context.expr.isAssignable;
+    Type falseType = context.type;
+    auto falseExpr = context.expr;
 
-    if (context.type != trueType) {
-        // TODO: implicit conversion
-        throw SemanticError("operand types '" + trueType.Name() + "' and '" + context.type.Name()
-                                + "' are incompatible",
-                            srcLocation);
+    context.expr.isConstant =
+        condExpr.isConstant && trueExpr.isConstant && falseExpr.isConstant;
+
+    if (trueType == falseType) {
+        context.expr.constant =
+            condExpr.constant.boolVal ? trueExpr.constant : falseExpr.constant;
+        return;
     }
 
-    context.expr.isAssignable = trueAssignable && falseAssignable;
+    trueType  = trueType.Decay();
+    falseType = falseType.Decay();
+
+    if (trueType == falseType) {
+        context.type            = trueType;
+        context.expr.isConstant = false;
+        return;
+    }
+
+    // TODO: more conditional expr implicit conversion
+
+    // Convert to arithmetic type
+    Type commonType = trueType.ArithmeticConvert(falseType);
+
+    if (!trueType.IsConvertibleTo(commonType, &trueExpr.constant)
+        || !falseType.IsConvertibleTo(commonType, &falseExpr.constant))
+        throw SemanticError("operand types '" + trueType.Name() + "' and '"
+                                + falseType.Name() + "' are incompatible",
+                            srcLocation);
+
+    context.type = commonType;
+    context.expr.constant =
+        condExpr.constant.boolVal ? trueExpr.constant : falseExpr.constant;
 }
 
 void BinaryExpression::Analysis(SemanticContext &context) const
@@ -55,50 +82,50 @@ void BinaryExpression::Analysis(SemanticContext &context) const
 
     switch (op) {
     case BinaryOp::SUBSCRIPT:
-        if (context.type.arrayDescList.empty()
-            && (context.type.ptrDescList.empty()
-                || context.type.ptrDescList.back().ptrType != PtrType::PTR)) {
+        context.type = context.type.Decay();
+        if (!context.type.IsPtr())
             throw SemanticError("subscripted value is not array or pointer", srcLocation);
-        }
-        // TODO: operator[]
         break;
 
     case BinaryOp::DOT:
-    case BinaryOp::DOTSTAR: {
-        if (context.type.typeClass != TypeClass::CLASS)
-            throw SemanticError("member reference base type '" + context.type.Name()
-                                    + "' is not a class or struct",
-                                srcLocation);
-
-        if (!context.type.ptrDescList.empty()
-            && context.type.ptrDescList.back().ptrType != PtrType::REF)
-            throw SemanticError("member reference type '" + context.type.Name()
-                                    + "' is not a pointer; note: use '.' instead",
-                                srcLocation);
-
-        auto classDesc              = static_cast<ClassDescriptor *>(context.type.typeDesc.get());
-        rightContext.symtab         = classDesc->memberTable.get();
-        rightContext.expr.qualified = true;
-        break;
-    }
-    case BinaryOp::ARROW:
-    case BinaryOp::ARROWSTAR: {
-        if (context.type.typeClass != TypeClass::CLASS)
-            throw SemanticError("member reference base type '" + context.type.Name()
-                                    + "' is not a class or struct",
-                                srcLocation);
-
-        if (context.type.ptrDescList.empty()
-            || context.type.ptrDescList.back().ptrType == PtrType::REF)
+    case BinaryOp::DOTSTAR:
+        if (context.type.IsPtr() && context.type.RemovePtr().IsSimple(TypeClass::CLASS))
             throw SemanticError("member reference type '" + context.type.Name()
                                     + "' is a pointer; note: use '->' instead",
                                 srcLocation);
 
-        auto classDesc              = static_cast<ClassDescriptor *>(context.type.typeDesc.get());
-        rightContext.symtab         = classDesc->memberTable.get();
+        if (!context.type.RemoveRef().IsSimple(TypeClass::CLASS))
+            throw SemanticError("member reference base type '" + context.type.Name()
+                                    + "' is not a class or struct",
+                                srcLocation);
+
+        rightContext.symtab         = context.type.Class()->memberTable.get();
         rightContext.expr.qualified = true;
         break;
-    }
+
+    case BinaryOp::ARROW:
+    case BinaryOp::ARROWSTAR:
+        context.type = context.type.Decay();
+        if (!context.type.IsPtr()) {
+            if (context.type.IsSimple(TypeClass::CLASS))
+                throw SemanticError("member reference type '" + context.type.Name()
+                                        + "' is not a pointer; note: use '.' instead",
+                                    srcLocation);
+            else
+                throw SemanticError("member reference type '" + context.type.Name()
+                                        + "' is not a pointer",
+                                    srcLocation);
+        }
+
+        if (!context.type.RemovePtr().IsSimple(TypeClass::CLASS))
+            throw SemanticError("member reference base type '" + context.type.Name()
+                                    + "' is not a class or struct",
+                                srcLocation);
+
+        rightContext.symtab         = context.type.Class()->memberTable.get();
+        rightContext.expr.qualified = true;
+        break;
+
     default: break;
     }
 
@@ -106,28 +133,59 @@ void BinaryExpression::Analysis(SemanticContext &context) const
 
     switch (op) {
     case BinaryOp::SUBSCRIPT:
-        if (!rightContext.type.IsConvertibleTo(Type::IntType))
+        if (!rightContext.type.IsConvertibleTo(FundType::INT))
             throw SemanticError("array subscript is not an integer", srcLocation);
         // TODO: operator[]
 
-        if (!context.type.ptrDescList.empty()) {
-            context.type.ptrDescList.pop_back();
-        }
-        else {
-            assert(!context.type.arrayDescList.empty());
-            context.type.arrayDescList.pop_back();
-        }
-        context.expr.isAssignable = true;
+        context.type =
+            context.type.RemovePtr().AddPtrDesc(Type::PtrDescriptor {PtrType::REF});
+        // TODO: subscript symbol set
+        context.symbolSet       = {};
+        context.expr.isConstant = false;
         break;
 
     case BinaryOp::DOT:
     case BinaryOp::DOTSTAR:
+        if (!context.type.IsRef() && rightContext.type.IsRef())
+            rightContext.type = rightContext.type.RemoveRef();
     case BinaryOp::ARROW:
     case BinaryOp::ARROWSTAR:
-        context.type              = rightContext.type;
-        context.expr.isAssignable = true;
+        context.type            = rightContext.type;
+        context.symbolSet       = rightContext.symbolSet;
+        context.expr.isConstant = false;
         break;
-    default: context.expr.isAssignable = false; break;
+
+    case BinaryOp::COMMA:
+        context.type      = rightContext.type;
+        context.symbolSet = rightContext.symbolSet;
+        context.expr.isConstant &= rightContext.expr.isConstant;
+        context.expr.constant = rightContext.expr.constant;
+        break;
+
+    default:
+        // Convert to arithmetic type
+        context.type      = context.type.Decay();
+        rightContext.type = rightContext.type.Decay();
+        Type commonType   = context.type.ArithmeticConvert(rightContext.type);
+
+        // TODO: more binary operand type
+
+        if (!context.type.IsConvertibleTo(commonType, &context.expr.constant)
+            || !rightContext.type.IsConvertibleTo(commonType,
+                                                  &rightContext.expr.constant))
+            throw SemanticError("invalid operand types '" + context.type.Name()
+                                    + "' and '" + rightContext.type.Name()
+                                    + "' to binary expression",
+                                srcLocation);
+
+        context.type      = commonType;
+        context.symbolSet = {};
+
+        if (context.expr.isConstant &= rightContext.expr.isConstant) {
+            // TODO: binary constant calc
+            context.expr.isConstant = false;
+        }
+        break;
     }
 }
 
@@ -149,52 +207,80 @@ void UnaryExpression::Analysis(SemanticContext &context) const
 
     switch (op) {
     case UnaryOp::UNREF:
-        if (context.type.ptrDescList.empty() && context.type.arrayDescList.empty())
+        context.type = context.type.Decay();
+        if (!context.type.IsPtr())
             throw SemanticError("indirection type '" + context.type.Name()
                                     + "' is not pointer operand",
                                 srcLocation);
+
+        context.type =
+            context.type.RemovePtr().AddPtrDesc(Type::PtrDescriptor {PtrType::REF});
         break;
+
     case UnaryOp::ADDRESSOF:
-        if (!context.expr.isAssignable)
-            throw SemanticError("cannot take the address of an rvalue of type '"
-                                    + context.type.Name() + "'",
-                                srcLocation);
-        break;
-    case UnaryOp::PREINC:
-    case UnaryOp::PREDEC:
-    case UnaryOp::POSTINC:
-    case UnaryOp::POSTDEC:
-        if (!context.expr.isAssignable)
-            throw SemanticError("expression is not assignable", srcLocation);
-    default: break;
-    }
-
-    if (context.type.typeClass != TypeClass::FUNDTYPE) {
-        // Operator overloadOp = ToOverloadOp(op);
-        throw SemanticError("cannot increment value of type '" + context.type.Name() + "'",
-                            srcLocation);
-    }
-
-    switch (op) {
-    case UnaryOp::UNREF:
-        if (!context.type.ptrDescList.empty()) {
-            context.type.ptrDescList.pop_back();
+        if (context.type.IsSimple(TypeClass::FUNCTION)) {
+            context.type = context.type.Decay();
         }
         else {
-            assert(!context.type.arrayDescList.empty());
-            context.type.arrayDescList.pop_back();
-        }
-    case UnaryOp::PREINC:
-    case UnaryOp::PREDEC: context.expr.isAssignable = true; break;
-    case UnaryOp::SIZEOF:
-        context.expr.constant.intVal = context.type.TypeSize();
-        context.expr.isConstant      = true;
-        context.type                 = Type::IntType;
+            if (!context.type.IsRef())
+                throw SemanticError("cannot take the address of an rvalue of type '"
+                                        + context.type.Name() + "'",
+                                    srcLocation);
 
-    case UnaryOp::ADDRESSOF:
-        context.type.ptrDescList.push_back(
-            Type::PtrDescriptor {PtrType::PTR, CVQualifier::NONE, nullptr});
-    default: context.expr.isAssignable = false; break;
+            context.type = context.type.RemoveRef();
+
+            // if (context.type.RemoveRef().Function()->isNonStaticMember)
+            //     // member function to member function pointer
+            //     context.type.AddPtrDesc(Type::PtrDescriptor {
+            //         PtrType::CLASSPTR,
+            //         CVQualifier::NONE,
+            //         context.type.Function()->funcScope->GetCurrentClass()});
+            // else
+            context.type.AddPtrDesc(Type::PtrDescriptor {PtrType::PTR});
+        }
+
+        break;
+
+    case UnaryOp::PREINC:
+    case UnaryOp::PREDEC:
+        if (!context.type.IsRef())
+            throw SemanticError("expression is not assignable", srcLocation);
+        break;
+
+    case UnaryOp::POSTINC:
+    case UnaryOp::POSTDEC:
+        if (!context.type.IsRef())
+            throw SemanticError("expression is not assignable", srcLocation);
+
+        context.type = context.type.RemoveRef();
+        break;
+
+    case UnaryOp::SIZEOF:
+        context.expr.constant.intVal = context.type.Decay().Size();
+        context.expr.isConstant      = true;
+        context.type                 = {FundType::INT};
+
+    case UnaryOp::LOGINOT:
+        context.type = context.type.Decay();
+
+        if (!context.type.IsConvertibleTo(FundType::BOOL, &context.expr.constant))
+            throw SemanticError("invalid argumrnt type '" + context.type.Name()
+                                    + "' to unary expression",
+                                srcLocation);
+
+        context.type = {FundType::BOOL};
+        break;
+
+    default:
+        context.type   = context.type.Decay();
+        Type arithType = context.type.ArithmeticConvert(FundType::INT);
+
+        if (!context.type.IsConvertibleTo(arithType, &context.expr.constant))
+            throw SemanticError("invalid argumrnt type '" + context.type.Name()
+                                    + "' to unary expression",
+                                srcLocation);
+        context.type = arithType;
+        break;
     }
 }
 
@@ -202,15 +288,12 @@ void CallExpression::Analysis(SemanticContext &context) const
 {
     funcExpr->Analysis(context);
 
-    if (context.type.typeClass != TypeClass::FUNCTION && context.type.arrayDescList.empty())
+    if (!context.type.RemovePtr().IsSimple(TypeClass::FUNCTION))
         throw SemanticError("called object type '" + context.type.Name()
                                 + "' is not a function or function pointer",
                             srcLocation);
 
-    if (params)
-        params->Analysis(context);
-
-    context.expr.isAssignable = true;
+    params->Analysis(context);
 }
 
 void ConstructExpression::Analysis(SemanticContext &context) const
@@ -218,8 +301,6 @@ void ConstructExpression::Analysis(SemanticContext &context) const
     type->Analysis(context);
     if (params)
         params->Analysis(context);
-
-    context.expr.isAssignable = true;
 }
 
 void SizeofExpression::Analysis(SemanticContext &context) const
@@ -227,13 +308,13 @@ void SizeofExpression::Analysis(SemanticContext &context) const
     typeId->Analysis(context);
 
     if (!context.type.IsComplete())
-        throw SemanticError("apply sizeof to incomplete type '" + context.type.Name() + "'",
+        throw SemanticError("apply sizeof to incomplete type '" + context.type.Name()
+                                + "'",
                             srcLocation);
 
-    context.expr.constant.intVal = context.type.TypeSize();
+    context.expr.constant.intVal = context.type.Size();
     context.expr.isConstant      = true;
-    context.expr.isAssignable    = false;
-    context.type                 = Type::IntType;
+    context.type                 = {FundType::INT};
 }
 
 void PlainNew::Analysis(SemanticContext &context) const
@@ -242,8 +323,6 @@ void PlainNew::Analysis(SemanticContext &context) const
         placement->Analysis(context);
 
     typeId->Analysis(context);
-
-    context.expr.isAssignable = false;
 }
 
 void InitializableNew::Analysis(SemanticContext &context) const
@@ -264,8 +343,6 @@ void InitializableNew::Analysis(SemanticContext &context) const
 
     if (initializer)
         initializer->Analysis(context);
-
-    context.expr.isAssignable = false;
 }
 
 void DeleteExpression::Analysis(SemanticContext &context) const
@@ -273,7 +350,7 @@ void DeleteExpression::Analysis(SemanticContext &context) const
     expr->Analysis(context);
     // TODO: type check
 
-    context.expr.isAssignable = false;
+    context.type = {FundType::VOID};
 }
 
 void IdExpression::Analysis(SemanticContext &context) const
@@ -282,11 +359,12 @@ void IdExpression::Analysis(SemanticContext &context) const
     bool         qualified = context.expr.qualified;
 
     if (nameSpec) {
-        if (context.decl.state != DeclState::NODECL)
-            throw SemanticError("declaration of " + identifier + "outside its scope", srcLocation);
+        /*if (context.decl.state != DeclState::NODECL)
+            throw SemanticError("declaration of '" + identifier + "' outside its scope",
+                                srcLocation);*/
 
         nameSpec->Analysis(context);
-        symtab    = context.specifiedScope;
+        symtab    = context.qualifiedScope;
         qualified = true;
     }
 
@@ -296,15 +374,17 @@ void IdExpression::Analysis(SemanticContext &context) const
     if (context.decl.isTypedef) {
         // Inject typename name into symbol table
         if (!symtab->AddTypedef(composedId, context.type))
-            throw SemanticError("redeclaration type alias of '" + composedId + "'", srcLocation);
+            throw SemanticError("redeclaration type alias of '" + composedId + "'",
+                                srcLocation);
 
-        context.symbolSet = nullptr;
+        context.symbolSet = {};
         return;
     }
 
     if (context.decl.state != DeclState::NODECL) {
         // Record new symbol
-        context.newSymbol = {composedId, context.type, {}};
+        context.newSymbol = {composedId, context.type, context.decl.symAttr};
+        // maybe unused (id declarator already sets symbolSet)
         context.symbolSet = &context.newSymbol;
     }
     else {
@@ -313,23 +393,36 @@ void IdExpression::Analysis(SemanticContext &context) const
             switch (stype) {
             case DESTRUCTOR:
                 // TODO: gen default destructor
-                context.newSymbol = {composedId, context.type, {}};
+                context.newSymbol = {composedId, context.type};
                 break;
             case CONSTRUCTOR:
                 // TODO: gen default constructor
-                context.newSymbol = {composedId, context.type, {}};
+                context.newSymbol = {composedId, context.type};
                 break;
             default:
-                throw SemanticError("use of undeclared identifier '" + composedId + "'",
-                                    srcLocation);
+                if (qualified)
+                    throw SemanticError("no member named '" + composedId + "' in '"
+                                            + symtab->ScopeName() + "'",
+                                        srcLocation);
+                else
+                    throw SemanticError("use of undeclared identifier '" + composedId
+                                            + "'",
+                                        srcLocation);
                 break;
             }
             context.symbolSet = &context.newSymbol;
         }
-        context.type = context.symbolSet.Get()->type;
-    }
 
-    context.expr.isAssignable = stype == NO;
+        context.type = context.symbolSet->type;
+        context.expr.isConstant =
+            (context.symbolSet->attr & ~Symbol::ACCESSMASK) == Symbol::CONSTANT;
+        context.expr.constant.intVal = context.symbolSet->intConstant;
+
+        // Id expression is always a l-value (function, array is l-value already)
+        if (!context.type.IsRef() && !context.type.IsSimple(TypeClass::FUNCTION)
+            && !context.type.IsArray())
+            context.type.AddPtrDesc(Type::PtrDescriptor {PtrType::REF});
+    }
 }
 
 std::string IdExpression::ComposedId(SemanticContext &context) const
@@ -343,74 +436,84 @@ std::string IdExpression::ComposedId(SemanticContext &context) const
 
 void ThisExpression::Analysis(SemanticContext &context) const
 {
-    context.expr.isAssignable = false;
-    // TODO
+    // TODO: symbol for this class object
 }
 
 void IntLiteral::Analysis(SemanticContext &context) const
 {
-    context.type                 = Type::IntType;
+    context.type                 = {FundType::INT};
     context.expr.constant.intVal = value;
     context.expr.isConstant      = true;
-    context.expr.isAssignable    = false;
 }
 
 void FloatLiteral::Analysis(SemanticContext &context) const
 {
-    context.type                   = Type::FloatType;
+    context.type                   = {FundType::DOUBLE};
     context.expr.constant.floatVal = value;
     context.expr.isConstant        = true;
-    context.expr.isAssignable      = false;
 }
 
 void CharLiteral::Analysis(SemanticContext &context) const
 {
-    context.type                  = Type::CharType;
+    context.type                  = {FundType::CHAR};
     context.expr.constant.charVal = value;
     context.expr.isConstant       = true;
-    context.expr.isAssignable     = false;
 }
 
 void StringLiteral::Analysis(SemanticContext &context) const
 {
-    context.type = Type::StringTypeProto;
+    context.type = {FundType::CHAR, CVQualifier::CONST};
     context.type.arrayDescList.push_back(Type::ArrayDescriptor {value.length() + 1, {}});
 
     context.stringTable.push_back(value);
     context.expr.constant.strIdx = context.stringTable.size() - 1;
     context.expr.isConstant      = true;
-    context.expr.isAssignable    = false;
 }
 
 void BoolLiteral::Analysis(SemanticContext &context) const
 {
-    context.type                  = Type::BoolType;
+    context.type                  = {FundType::BOOL};
     context.expr.constant.boolVal = value;
     context.expr.isConstant       = true;
-    context.expr.isAssignable     = false;
 }
 
 void ExpressionList::Analysis(SemanticContext &context) const
 {
+    // Here symbolSet is the object(s) of function call syntax
     assert(context.symbolSet);
-    if (context.symbolSet.Count() == 1) {
-        auto funcDesc = static_cast<FunctionDescriptor *>(context.type.typeDesc.get());
 
-        if (funcDesc->paramList.size() != exprList.size())
-            throw SemanticError("no matching function for call to '" + context.symbolSet.Get()->id
-                                    + "'",
-                                srcLocation);
+    if (context.symbolSet.size() == 1) {
+        // TODO: class, fundtype, enum: para init
+        switch (context.type.typeClass) {
+        case TypeClass::FUNDTYPE: break;
+        case TypeClass::ENUM: break;
+        case TypeClass::CLASS:
+            // TODO: operator() or constructor
+            break;
+        default:
+            auto funcDesc = context.type.Function();
 
-        for (std::size_t i = 0; i < exprList.size(); i++) {
-            exprList[i]->Analysis(context);
-            if (!context.type.IsConvertibleTo(funcDesc->paramList[i].symbol->type))
-                throw SemanticError("expression type '" + context.type.Name()
-                                        + "' does not fit argument type '"
-                                        + funcDesc->paramList[i].symbol->type.Name() + "'",
+            // TODO: default parameter match
+            if (funcDesc->paramList.size() != exprList.size())
+                throw SemanticError("no matching function for call to '"
+                                        + context.symbolSet->id + "'",
                                     srcLocation);
+
+            for (std::size_t i = 0; i < exprList.size(); i++) {
+                exprList[i]->Analysis(context);
+                if (!context.type.IsConvertibleTo(funcDesc->paramList[i].symbol->type))
+                    throw SemanticError("expression type '" + context.type.Name()
+                                            + "' does not fit argument type '"
+                                            + funcDesc->paramList[i].symbol->type.Name()
+                                            + "'",
+                                        srcLocation);
+            }
+
+            context.type = funcDesc->retType;
         }
     }
     else {
+        // TODO: overload function resolution
     }
 }
 

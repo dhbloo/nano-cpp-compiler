@@ -17,10 +17,10 @@ int   t = 1, &rt = t, w(1 + 2), &rw(w);
 float u = 2.0f;
 char  v = 'r';
 
-int arr[10], arr2[5][6], arr3[2][3][4];
-//int iarr[]     = {1, 2, 3, 4};
-//int iarr2[][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
-void* varr[3];
+int   arr[10], arr2[5][6], arr3[2][3][4];
+int   iarr[4] = {1, 2, 3, 4};
+int   iarr2[3][3] = {{1, 2, 3}, {4, 5, 6}, {7, 8, 9}};
+void *varr[3];
 
 int *  pa, **ppa, *paa[5], &ra = t;
 char **ppb, *&prb = *ppb;
@@ -36,10 +36,8 @@ int (*(*fx[2])())[3];
 char *(*foo)(char *);
 char *(*(*fuu[5])(char *))[10];
 char *const (*(*const bar)[5])(int);
-char *const (* (** const(** zz[1])[2])[3])[4];
+char *const (*(**const (**zz[1])[2])[3])[4];
 
-//int **&* error1;
-
-//void error2[10];
-
-//void* error3[10][];
+// int **&* error1;
+// void error2[10];
+// void* error3[10][];

@@ -27,7 +27,7 @@ void ExpressionStatement::Print(std::ostream &os, Indent indent) const
 
 void CompoundStatement::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "复合语句:\n";
+    os << indent << "复合语句:" << (stmts.empty() ? " (空)\n" : "\n");
 
     for (std::size_t i = 0; i < stmts.size(); i++) {
         os << indent + 1 << "语句[" << i << "]:\n";

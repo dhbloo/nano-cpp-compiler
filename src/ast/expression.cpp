@@ -36,10 +36,10 @@ void ConditionalExpression::Print(std::ostream &os, Indent indent) const
 
 void BinaryExpression::Print(std::ostream &os, Indent indent) const
 {
-    const char *BINARYOP_NAME[] = {"SUBSCRIPT", "DOT", "ARROW", "DOTSTAR", "ARROWSTAR", "MUL",
-                                   "DIV",       "MOD", "ADD",   "SUB",     "SHL",       "SHR",
-                                   "GT",        "LT",  "LE",    "GE",      "EQ",        "NE",
-                                   "AND",       "XOR", "OR",    "LOGIAND", "LOGIOR",    "COMMA"};
+    const char *BINARYOP_NAME[] = {
+        "SUBSCRIPT", "DOT", "ARROW", "DOTSTAR", "ARROWSTAR", "MUL",  "DIV", "MOD", "ADD",
+        "SUB",       "SHL", "SHR",   "GT",      "LT",        "LE",   "GE",  "EQ",  "NE",
+        "AND",       "XOR", "OR",    "LOGIAND", "LOGIOR",    "COMMA"};
 
     os << indent << "二元运算表达式: " << BINARYOP_NAME[(int)op] << "\n";
     os << indent + 1 << "左表达式:\n";
@@ -80,10 +80,9 @@ void CallExpression::Print(std::ostream &os, Indent indent) const
     os << indent << "函数调用表达式:\n";
     os << indent + 1 << "函数:\n";
     funcExpr->Print(os, indent + 2);
-    if (params) {
-        os << indent + 1 << "调用参数:\n";
-        params->Print(os, indent + 2);
-    }
+
+    os << indent + 1 << "调用参数:";
+    params->Print(os, indent + 2);
 }
 
 void ConstructExpression::Print(std::ostream &os, Indent indent) const
@@ -91,10 +90,9 @@ void ConstructExpression::Print(std::ostream &os, Indent indent) const
     os << indent << "类型构造表达式:\n";
     os << indent + 1 << "类型:\n";
     type->Print(os, indent + 2);
-    if (params) {
-        os << indent + 1 << "构造参数:\n";
-        params->Print(os, indent + 2);
-    }
+
+    os << indent + 1 << "构造参数:";
+    params->Print(os, indent + 2);
 }
 
 void SizeofExpression::Print(std::ostream &os, Indent indent) const
@@ -106,7 +104,7 @@ void SizeofExpression::Print(std::ostream &os, Indent indent) const
 void NewExpression::Print(std::ostream &os, Indent indent) const
 {
     if (placement) {
-        os << indent << "布置new:\n";
+        os << indent << "布置new:";
         placement->Print(os, indent + 1);
     }
 }
@@ -134,10 +132,8 @@ void InitializableNew::Print(std::ostream &os, Indent indent) const
         arraySizes[i]->Print(os, indent + 2);
     }
 
-    if (initializer) {
-        os << indent + 1 << "初始化:\n";
-        initializer->Print(os, indent + 2);
-    }
+    os << indent + 1 << "初始化参数:";
+    initializer->Print(os, indent + 2);
 }
 
 void DeleteExpression::Print(std::ostream &os, Indent indent) const
@@ -192,21 +188,23 @@ void BoolLiteral::Print(std::ostream &os, Indent indent) const
 
 void ExpressionList::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "表达式列表:\n";
+    os << (exprList.empty() ? " (空)\n" : "\n");
+
     for (std::size_t i = 0; i < exprList.size(); i++) {
-        os << indent + 1 << "表达式[" << i << "]:\n";
-        exprList[i]->Print(os, indent + 2);
+        os << indent << "表达式[" << i << "]:\n";
+        exprList[i]->Print(os, indent + 1);
     }
 }
 
 void OperatorFunctionId::Print(std::ostream &os, Indent indent) const
 {
     const char *OP_NAME[] = {
-        "ADD",     "SUB",     "MUL",       "DIV",     "MOD",    "XOR",      "AND",     "OR",
-        "NOT",     "LOGINOT", "ASSIGN",    "LT",      "GT",     "SELFADD",  "SELFSUB", "SELFMUL",
-        "SELFDIV", "SELFMOD", "SELFXOR",   "SELFAND", "SELFOR", "SHL",      "SHR",     "SELFSHL",
-        "SELFSHR", "EQ",      "NE",        "LE",      "GE",     "LOGIAND",  "LOGIOR",  "SELFINC",
-        "SELFDEC", "COMMA",   "ARROWSTAR", "ARROW",   "CALL",   "SUBSCRIPT"};
+        "ADD",     "SUB",     "MUL",      "DIV",     "MOD",     "XOR",     "AND",
+        "OR",      "NOT",     "LOGINOT",  "ASSIGN",  "LT",      "GT",      "SELFADD",
+        "SELFSUB", "SELFMUL", "SELFDIV",  "SELFMOD", "SELFXOR", "SELFAND", "SELFOR",
+        "SHL",     "SHR",     "SELFSHL",  "SELFSHR", "EQ",      "NE",      "LE",
+        "GE",      "LOGIAND", "LOGIOR",   "SELFINC", "SELFDEC", "COMMA",   "ARROWSTAR",
+        "ARROW",   "CALL",    "SUBSCRIPT"};
 
     os << indent << "运算符函数Id: " << OP_NAME[(int)overloadOp] << "\n";
 }

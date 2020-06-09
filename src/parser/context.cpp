@@ -21,17 +21,17 @@ bool ParseContext::PushQueryScope(std::string scopeName)
     return false;
 }
 
-void ParseContext::EnterAnonymousScope()
+void ParseContext::EnterLocalScope()
 {
-    scopeStack.push(std::shared_ptr<Scope> {new Scope {scopeStack.top().get(), lastAddedName}});
+    scopeStack.push(std::shared_ptr<Scope> {new Scope {scopeStack.top().get(), ""}});
 }
 
 void ParseContext::EnterLastAddedName()
 {
-    Scope *                newScope = new Scope {scopeStack.top().get(), lastAddedName};
-    std::shared_ptr<Scope> newPtr {newScope};
-    scopeStack.top()->scopeMap[lastAddedName] = newPtr;
-    scopeStack.push(newPtr);
+    std::shared_ptr<Scope> newScope {new Scope {scopeStack.top().get(), lastAddedName}};
+    if (!lastAddedName.empty())
+        scopeStack.top()->scopeMap[lastAddedName] = newScope;
+    scopeStack.push(newScope);
 }
 
 void ParseContext::PopQueryScopes()
@@ -62,20 +62,23 @@ void ParseContext::AddPossibleTypedefName(std::string name)
 
 bool ParseContext::AddName(std::string name, IdType type)
 {
-    for (Scope *scope = scopeStack.top().get(); scope; scope = scope->parentScope) {
-        auto it = scope->nameMap.find(name);
-        if (it != scope->nameMap.end()) {
-            if (it->second == type) {
-                lastAddedName = name;
-                return true;
+    if (!name.empty()) {
+        for (Scope *scope = scopeStack.top().get(); scope; scope = scope->parentScope) {
+            auto it = scope->nameMap.find(name);
+            if (it != scope->nameMap.end()) {
+                if (it->second == type) {
+                    lastAddedName = name;
+                    return true;
+                }
+                else
+                    return false;
             }
-            else
-                return false;
         }
+
+        scopeStack.top()->nameMap[name] = type;
     }
 
-    scopeStack.top()->nameMap[name] = type;
-    lastAddedName                   = name;
+    lastAddedName = name;
     return true;
 }
 

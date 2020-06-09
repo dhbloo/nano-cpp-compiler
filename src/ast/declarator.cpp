@@ -36,6 +36,31 @@ void Declarator::MergePtrSpec(Ptr<PtrSpecifier> ptrSpec)
     decl->ptrSpec = Merge(std::move(ptrSpec), std::move(decl->ptrSpec));
 }
 
+bool Declarator::IsFunctionDecl() const
+{
+    return false;
+}
+
+bool FunctionDeclarator::IsFunctionDecl() const
+{
+    return true;
+}
+
+bool IdDeclarator::IsFunctionDecl() const
+{
+    return !ptrSpec && innerDecl ? innerDecl->IsFunctionDecl() : false;
+}
+
+bool Declarator::IsTypeConversionDecl() const
+{
+    return false;
+}
+
+bool IdDeclarator::IsTypeConversionDecl() const
+{
+    return typeid(*id) == typeid(ConversionFunctionId);
+}
+
 void PtrSpecifier::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "类型指针修饰:\n";
@@ -173,7 +198,7 @@ void ListInitializer::Print(std::ostream &os, Indent indent) const
 
 void ParenthesisInitializer::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "括号初始化:\n";
+    os << indent << "括号初始化:";
     exprList->Print(os, indent + 1);
 }
 

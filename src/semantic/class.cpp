@@ -5,27 +5,6 @@
 
 namespace ast {
 
-std::string ConversionFunctionId::ComposedId(SemanticContext &context) const
-{
-    SemanticContext newContext {context};
-    typeSpec->Analysis(newContext);
-
-    if (ptrSpec)
-        ptrSpec->Analysis(newContext);
-
-    return "operator " + newContext.type.Name() + "()";
-}
-
-std::string OperatorFunctionId::ComposedId(SemanticContext &context) const
-{
-    const char *OpNameTable[] = {"+",  "-",  "*",  "/",   "%",   "^",  "&",  "|",  "~",  "!",
-                                 "=",  "<",  ">",  "+=",  "-=",  "*=", "/=", "%=", "^=", "&=",
-                                 "|=", "<<", ">>", "<<=", ">>=", "==", "!=", "<=", ">=", "&&",
-                                 "||", "++", "--", ",",   "->*", "->", "()", "[]"};
-
-    return std::string("operator") + OpNameTable[(int)overloadOp] + "()";
-}
-
 void ClassSpecifier::Analysis(SemanticContext &context) const
 {
     std::shared_ptr<ClassDescriptor> classDesc;
@@ -34,58 +13,74 @@ void ClassSpecifier::Analysis(SemanticContext &context) const
 
     if (nameSpec) {
         nameSpec->Analysis(context);
-        symtab    = context.specifiedScope;
+        symtab    = context.qualifiedScope;
         qualified = true;
     }
 
     classDesc = symtab->QueryClass(identifier, qualified);
     if (!classDesc) {
         if (qualified)
-            throw SemanticError("no class named '" + identifier + "' in '" + symtab->ScopeName()
-                                    + "'",
+            throw SemanticError("no class named '" + identifier + "' in '"
+                                    + symtab->ScopeName() + "'",
                                 srcLocation);
 
         classDesc            = std::make_shared<ClassDescriptor>();
         classDesc->className = identifier;
+        if (classDesc->className.empty()) {
+            classDesc->className = "<anonymous class>";
+        }
 
         // Inject class name into symbol table
-        symtab->AddClass(classDesc);
+        if (!identifier.empty())
+            symtab->AddClass(classDesc);
     }
 
-    classDesc->memberTable = std::make_shared<SymbolTable>(context.symtab, classDesc.get());
-    context.symtab         = classDesc->memberTable.get();
+    classDesc->memberTable =
+        std::make_shared<SymbolTable>(context.symtab, classDesc.get());
+
+    SemanticContext classContext(context);
+    classContext.symtab = classDesc->memberTable.get();
 
     if (baseSpec)
-        baseSpec->Analysis(context);
+        baseSpec->Analysis(classContext);
 
-    memberList->Analysis(context);
+    memberList->Analysis(classContext);
 
-    context.symtab = context.symtab->GetParent();
-    context.type   = Type {TypeClass::CLASS, CVQualifier::NONE, {}, {}, FundType::VOID, classDesc};
+    context.type = {classDesc};
 }
 
 void MemberList::Analysis(SemanticContext &context) const
 {
+    auto lastDecl = context.decl;
+
+    // Restore point
     for (const auto &m : members) {
-        m->Analysis(context);
+        try {
+            // Always follow last decl from upper scope
+            context.decl = {lastDecl.state};
+            m->Analysis(context);
+        }
+        catch (SemanticError error) {
+            context.errorStream << error;
+            context.errCnt++;
+        }
     }
+
+    context.decl = lastDecl;
 }
 
 void MemberDeclaration::Analysis(SemanticContext &context) const
 {
     assert(context.symbolSet);
-    auto &attr = context.symbolSet.Get()->attr;
+    auto &attr = context.symbolSet->attr;
 
-    if (context.decl.isFriend) {
-        attr = Symbol::Attribute(attr | Symbol::FRIEND);
+    if (context.decl.isFriend)
         return;
-    }
 
     switch (access) {
     case Access::PRIVATE: attr = Symbol::Attribute(attr | Symbol::PRIVATE); break;
     case Access::PROTECTED: attr = Symbol::Attribute(attr | Symbol::PROTECTED); break;
-    case Access::PUBLIC: attr = Symbol::Attribute(attr | Symbol::PUBLIC); break;
-    default: break;
+    default: attr = Symbol::Attribute(attr | Symbol::PUBLIC); break;
     }
 }
 
@@ -95,10 +90,8 @@ void MemberDefinition::Analysis(SemanticContext &context) const
 
     if (declSpec)
         declSpec->Analysis(context);
-    else {
-        context.type =
-            Type {TypeClass::FUNDTYPE, CVQualifier::NONE, {}, {}, FundType::VOID, nullptr};
-    }
+    else
+        context.type = {FundType::VOID};
 
     if (context.decl.state == DeclState::LOCALDECL)
         throw SemanticError("static data member not allowed in local class '"
@@ -121,28 +114,36 @@ void MemberDefinition::Analysis(SemanticContext &context) const
 
 void MemberDeclarator::Analysis(SemanticContext &context) const
 {
-    if (isPure) {
-        if (context.decl.symAttr == Symbol::VIRTUAL)
-            context.decl.symAttr = Symbol::PUREVIRTUAL;
-        else
-            throw SemanticError("only virtual function can be declared pure", srcLocation);
-    }
-
     decl->Analysis(context);
 
-    if (constInit) {
-        context.decl.state = DeclState::NODECL;
+    if (isPure) {
+        if (context.symbolSet->attr == Symbol::VIRTUAL)
+            context.symbolSet->attr = Symbol::PUREVIRTUAL;
+        else
+            throw SemanticError("only virtual function can be declared pure",
+                                srcLocation);
+    }
+    else if (constInit) {
+        if ((context.symbolSet->attr & ~Symbol::ACCESSMASK) != Symbol::STATIC)
+            throw SemanticError("in-class initialization of data member must be static",
+                                srcLocation);
 
-        Type varType = context.type;
+        if (context.type.cv != CVQualifier::CONST)
+            throw SemanticError(
+                "non-const static data member must be initialized out of line",
+                srcLocation);
 
-        constInit->Analysis(context);
+        SemanticContext newContext(context);
+        newContext.decl.state = DeclState::NODECL;
 
-        if (!context.expr.isConstant)
+        constInit->Analysis(newContext);
+
+        if (!newContext.expr.isConstant)
             throw SemanticError("initialize expression is not constant", srcLocation);
 
-        if (!context.type.IsConvertibleTo(varType))
-            throw SemanticError("cannot initialize '" + varType.Name() + "' with "
-                                    + context.type.Name(),
+        if (!newContext.type.IsConvertibleTo(context.type, &newContext.expr.constant))
+            throw SemanticError("cannot initialize '" + context.type.Name() + "' with "
+                                    + newContext.type.Name(),
                                 srcLocation);
     }
 }
@@ -155,24 +156,26 @@ void MemberFunction::Analysis(SemanticContext &context) const
 
 void BaseSpecifier::Analysis(SemanticContext &context) const
 {
-    auto classDesc = context.symtab->GetClass();
+    auto classDesc = context.symtab->GetCurrentClass();
     assert(classDesc);
 
     SymbolTable *symtab    = context.symtab;
     bool         qualified = false;
     if (nameSpec) {
         nameSpec->Analysis(context);
-        symtab    = context.specifiedScope;
+        symtab    = context.qualifiedScope;
         qualified = true;
     }
 
     // Query base class definition
     auto baseClassDesc = symtab->QueryClass(className, qualified);
     if (!baseClassDesc)
-        throw SemanticError("base class '" + className + "' has incomplete type", srcLocation);
+        throw SemanticError("base class '" + className + "' has incomplete type",
+                            srcLocation);
 
     classDesc->baseClassDesc = baseClassDesc.get();
     classDesc->baseAccess    = access;
+    classDesc->memberTable->SetStartOffset(baseClassDesc->memberTable->ScopeSize());
 }
 
 void CtorMemberInitializer::Analysis(SemanticContext &context) const
@@ -182,18 +185,18 @@ void CtorMemberInitializer::Analysis(SemanticContext &context) const
         bool         qualified = false;
         if (nameSpec) {
             nameSpec->Analysis(context);
-            symtab    = context.specifiedScope;
+            symtab    = context.qualifiedScope;
             qualified = true;
         }
 
         auto baseClassDesc = symtab->QueryClass(identifier, qualified);
         if (!baseClassDesc) {
-            throw SemanticError("no class named '" + identifier + "' in '" + symtab->ScopeName()
-                                    + "'",
+            throw SemanticError("no class named '" + identifier + "' in '"
+                                    + symtab->ScopeName() + "'",
                                 srcLocation);
         }
 
-        auto classDesc = context.symtab->GetClass();
+        auto classDesc = context.symtab->GetCurrentClass();
         bool founded   = false;
         while (classDesc->baseClassDesc) {
             classDesc = classDesc->baseClassDesc;
@@ -204,8 +207,9 @@ void CtorMemberInitializer::Analysis(SemanticContext &context) const
         }
 
         if (!founded)
-            throw SemanticError("'" + baseClassDesc->QualifiedName() + "' is not base of '"
-                                    + context.symtab->GetClass()->QualifiedName() + "'",
+            throw SemanticError("'" + baseClassDesc->memberTable->ScopeName()
+                                    + "' is not base of '" + context.symtab->ScopeName()
+                                    + "'",
                                 srcLocation);
 
         // TODO: Get constructor symbol set
@@ -214,10 +218,55 @@ void CtorMemberInitializer::Analysis(SemanticContext &context) const
         // Get member symbol
         context.symbolSet = context.symtab->QuerySymbol(identifier);
         if (!context.symbolSet)
-            throw SemanticError("use of undeclared identifier '" + identifier + "'", srcLocation);
+            throw SemanticError("use of undeclared identifier '" + identifier + "'",
+                                srcLocation);
     }
 
     exprList->Analysis(context);
+}
+
+void ConversionFunctionId::Analysis(SemanticContext &context) const
+{
+    Type funcType = context.type;
+
+    typeSpec->Analysis(context);
+
+    if (ptrSpec) {
+        ptrSpec->Analysis(context);
+        context.type.ptrDescList = std::move(context.ptrDescList);
+    }
+
+    // TODO: conversion id is not function exception
+    assert(funcType.typeClass == TypeClass::FUNCTION);
+
+    // Set function return type to conversion type
+    funcType.Function()->retType = context.type;
+    context.type                 = funcType;
+
+    IdExpression::Analysis(context);
+}
+
+std::string ConversionFunctionId::ComposedId(SemanticContext &context) const
+{
+    SemanticContext newContext {context};
+    typeSpec->Analysis(newContext);
+
+    if (ptrSpec) {
+        ptrSpec->Analysis(newContext);
+        newContext.type.ptrDescList = std::move(newContext.ptrDescList);
+    }
+
+    return "operator " + newContext.type.Name() + "()";
+}
+
+std::string OperatorFunctionId::ComposedId(SemanticContext &context) const
+{
+    const char *OpNameTable[] = {
+        "+",  "-",  "*",  "/",  "%",  "^",  "&",  "|",  "~",   "!",  "=",   "<",   ">",
+        "+=", "-=", "*=", "/=", "%=", "^=", "&=", "|=", "<<",  ">>", "<<=", ">>=", "==",
+        "!=", "<=", ">=", "&&", "||", "++", "--", ",",  "->*", "->", "()",  "[]"};
+
+    return std::string("operator") + OpNameTable[(int)overloadOp] + "()";
 }
 
 }  // namespace ast

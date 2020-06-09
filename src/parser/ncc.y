@@ -108,7 +108,6 @@
 %type<ast::Ptr<ast::NewExpression>> new_expression
 %type<ast::Ptr<ast::DeleteExpression>> delete_expression
 %type<ast::Ptr<ast::ExpressionList>> expression_list expression_list_opt
-%type<ast::Ptr<ast::ExpressionList>> new_placememt new_placememt_opt new_initializer new_initializer_opt
 %type<ast::Ptr<ast::InitializableNew>> new_type_id new_declarator
 %type<ast::PtrVec<ast::Expression>> direct_new_declarator
 %type<ast::Ptr<ast::NameSpecifier>> nested_name_specifier
@@ -163,7 +162,6 @@
 %type<ast::Ptr<ast::OperatorFunctionId>> operator_function_id
 %type<Operator> operator
 
-%type<bool> pure_specifier_opt
 %type<std::string> identifier identifier_opt enumerator typedef_name class_name enum_name
 
 %start translation_unit
@@ -402,6 +400,11 @@ expression_list:
         { $$ = $1; $$->exprList.push_back($3); }
 ;
 
+expression_list_opt:
+        { $$ = MkNode<ExpressionList>(); $$->srcLocation = @$; }
+|   expression_list
+        { $$ = $1; }
+
 unary_expression:
     postfix_expression          
         { $$ = $1; }
@@ -443,24 +446,32 @@ unary_operator:
 ;
 
 new_expression:
-    NEW new_placememt_opt new_type_id new_initializer_opt
+    NEW new_type_id
+        { $$ = $2; }
+|   NEW '(' expression_list ')' new_type_id
+        { auto e = $5; e->placement = $3; $$ = std::move(e); }
+|   NEW new_type_id '(' expression_list_opt ')'
+        { auto e = $2; e->initializer = $4; $$ = std::move(e); }
+|   NEW '(' expression_list ')' new_type_id '(' expression_list_opt ')'
         {
-            auto e = $3;
-            e->initializer = $4;
-            e->placement = $2;
+            auto e = $5;
+            e->initializer = $7;
+            e->placement = $3;
             $$ = std::move(e);
         }
-|   NEW '(' type_id ')' new_placememt_opt
+|   NEW '(' type_id ')'
         {
             auto e = MkNode<PlainNew>(); e->srcLocation = @$;
             e->typeId = $3;
-            e->placement = $5;
             $$ = std::move(e);
         }
-;
-
-new_placememt:
-    '(' expression_list ')'     { $$ = $2; }
+|   NEW '(' type_id ')' '(' expression_list ')'
+        {
+            auto e = MkNode<PlainNew>(); e->srcLocation = @$;
+            e->typeId = $3;
+            e->placement = $6;
+            $$ = std::move(e);
+        }
 ;
 
 new_type_id:
@@ -494,13 +505,6 @@ direct_new_declarator:
         { $$.push_back($2); }
 |   direct_new_declarator '[' constant_expression ']'
         { $$ = $1; $$.push_back($3); }
-;
-    
-new_initializer:
-    '(' ')'
-        { $$ = MkNode<ExpressionList>(); $$->srcLocation = @$; }
-|   '(' expression_list ')'
-        { $$ = $2; }
 ;
 
 delete_expression:
@@ -841,7 +845,7 @@ compound_statement:
     '{' '}'
         { $$ = MkNode<CompoundStatement>(); $$->srcLocation = @$; }
 |   '{'
-        { pc.EnterAnonymousScope(); } 
+        { pc.EnterLocalScope(); }
     statement_seq '}'
         { $$ = $3; pc.LeaveScope(); }
 ;
@@ -950,12 +954,8 @@ declaration_seq:
         { $$.push_back($1); }
 |   declaration_seq declaration
         { $$ = $1; $$.push_back($2); }
-|   error
-        { pc.PopQueryScopes(); }
 |   error ';'
         { pc.PopQueryScopes(); yyclearin; yyerrok; }
-|   declaration_seq error
-        { $$ = $1; pc.PopQueryScopes(); }
 |   declaration_seq error ';'
         { $$ = $1; pc.PopQueryScopes(); yyclearin; yyerrok; }
 ;
@@ -1122,17 +1122,13 @@ enum_specifier:
         {
             $$ = MkNode<EnumSpecifier>(); $$->srcLocation = @$;
             $$->identifier = $2;
-
-            if (!$$->identifier.empty())
-                pc.AddName($$->identifier, ParseContext::ENUM);
+            pc.AddName($$->identifier, ParseContext::ENUM);
         }
 |   ENUM identifier_opt '{' enumerator_list '}'
         {
             $$ = $4;
             $$->identifier = $2;
-
-            if (!$$->identifier.empty())
-                pc.AddName($$->identifier, ParseContext::ENUM);
+            pc.AddName($$->identifier, ParseContext::ENUM);
         }
 ;
     
@@ -1445,7 +1441,7 @@ initializer_list:
 
 class_specifier:
     class_head '{' 
-        { pc.EnterLastAddedName(); } 
+        { pc.EnterLastAddedName(); }
     member_specification '}'
         { 
             $$ = $1;
@@ -1454,6 +1450,8 @@ class_specifier:
             $$->memberList->Reverse();
             pc.LeaveScope();
         }
+|   error '{' member_specification '}'
+        { YYERROR; }
 ;
 
 class_head:
@@ -1462,6 +1460,7 @@ class_head:
             $$ = MkNode<ClassSpecifier>(); $$->srcLocation = @$;
             $$->key = $1;
             $$->baseSpec = $2;
+            pc.AddName("", ParseContext::CLASS);
         }
 |   class_key identifier base_clause_opt
         {
@@ -1478,16 +1477,17 @@ class_head:
             $$->nameSpec = $2;
             $$->identifier = $3;
             $$->baseSpec = $4;
+            pc.AddName($$->identifier, ParseContext::CLASS);
             pc.PopQueryScopes();
         }
 |   class_key enum_name base_clause_opt
-        { throw syntax_error(@2, "use of " + $2 + " does not match previous declaration"); }
+        { throw syntax_error(@2, "use of '" + $2 + "' does not match previous declaration"); }
 |   class_key nested_name_specifier enum_name base_clause_opt
-        { throw syntax_error(@3, "use of " + $3 + " does not match previous declaration"); }
+        { throw syntax_error(@3, "use of '" + $3 + "' does not match previous declaration"); }
 |   class_key typedef_name base_clause_opt
-        { throw syntax_error(@2, "use of " + $2 + " does not match previous declaration"); }
+        { throw syntax_error(@2, "use of '" + $2 + "' does not match previous declaration"); }
 |   class_key typedef_name enum_name base_clause_opt
-        { throw syntax_error(@3, "use of " + $3 + " does not match previous declaration"); }
+        { throw syntax_error(@3, "use of '" + $3 + "' does not match previous declaration"); }
 ;
 
 class_key:
@@ -1542,12 +1542,6 @@ member_declaration:
             e->decls = $2;
             $$ = std::move(e);
         }
-|   member_declarator ';'
-        {
-            auto e = MkNode<MemberDefinition>(); e->srcLocation = @$;
-            e->decls.push_back($1);
-            $$ = std::move(e);
-        }
 |   decl_specifier_seq '(' parameter_declaration_list ')' ';'
         {
             /* constructor forward decl hack */
@@ -1583,6 +1577,21 @@ member_declaration:
             e->func = $1; 
             $$ = std::move(e);
         }
+|   member_declarator ';'
+        {
+            auto e = MkNode<MemberDefinition>(); e->srcLocation = @$;
+            e->decls.push_back($1);
+
+            auto decl = e->decls.front()->decl.get();
+            if (!decl->IsFunctionDecl() || !decl->IsTypeConversionDecl())
+                throw syntax_error(@$, "type specifier is required for declaration");
+
+            $$ = std::move(e);
+        }
+|   decl_specifier_seq error ';'
+        { YYERROR; }
+|   error ';'
+        { YYERROR; }
 ;
 
 member_declarator_list:
@@ -1591,25 +1600,33 @@ member_declarator_list:
         { $$.push_back($1); }
 |   member_declarator_list ',' member_declarator
         { $$ = $1; $$.push_back($3); }
+|   member_declarator_list ',' error
+        { $$ = $1; yyerrok; }
 ;
 
 member_declarator:
-    declarator pure_specifier_opt
+    declarator
         {
             $$ = MkNode<MemberDeclarator>(); $$->srcLocation = @$;
             $$->decl = $1;
-            $$->isPure = $2;
         }
 |   declarator constant_initializer
         {
             $$ = MkNode<MemberDeclarator>(); $$->srcLocation = @$;
             $$->decl = $1;
             $$->constInit = $2;
+
+            if ($$->decl->IsFunctionDecl()) {
+                if (typeid(*$$->constInit) == typeid(IntLiteral) &&
+                    static_cast<IntLiteral*>($$->constInit.get())->value == 0) {
+                        $$->constInit = nullptr;
+                        $$->isPure = true;
+                    }
+                else
+                    throw syntax_error(@$, "initializer on function does not" 
+                                           " look like a pure-specifier");
+            }
         }
-;
-    
-pure_specifier:
-    '=' '0'
 ;
 
 constant_initializer:
@@ -1780,18 +1797,6 @@ operator:
 
 COMMA_opt: | ';';
 
-expression_list_opt:            { $$ = nullptr; }
-|   expression_list             { $$ = $1; }
-;
-
-new_placememt_opt:              { $$ = nullptr; }
-|   new_placememt               { $$ = $1; }
-;
-
-new_initializer_opt:            { $$ = nullptr; }
-|   new_initializer             { $$ = $1; }
-;
-
 expression_opt:                 { $$ = nullptr; }
 |   expression                  { $$ = $1; }
 ;
@@ -1822,10 +1827,6 @@ constant_expression_opt:        { $$ = nullptr; }
 
 assignment_expression_opt:      { $$ = nullptr; }
 |   '=' assignment_expression   { $$ = $2; }
-;
-
-pure_specifier_opt:             { $$ = false; }
-|   pure_specifier              { $$ = true; }
 ;
 
 conversion_declarator_opt:      { $$ = nullptr; }

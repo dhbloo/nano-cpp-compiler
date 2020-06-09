@@ -8,6 +8,9 @@ void ClassSpecifier::MoveDefaultMember()
 {
     Access defaultAccess = key == STRUCT ? Access::PUBLIC : Access::PRIVATE;
     memberList->MoveDefaultTo(defaultAccess);
+
+    if (baseSpec && baseSpec->access == Access::DEFAULT)
+        baseSpec->access = defaultAccess;
 }
 
 std::size_t MemberList::MemberCount() const
@@ -32,14 +35,17 @@ void MemberList::MoveDefaultTo(Access access)
     }
     else {
         members.reserve(members.size() + defaultMembers.size());
-        std::move(defaultMembers.begin(), defaultMembers.end(), std::back_inserter(members));
+        std::move(defaultMembers.begin(),
+                  defaultMembers.end(),
+                  std::back_inserter(members));
         defaultMembers.clear();
     }
 }
 
 void ClassSpecifier::Print(std::ostream &os, Indent indent) const
 {
-    os << indent << "类定义: " << (key == CLASS ? "class" : "struct") << ", 名称: " << identifier
+    os << indent << "类定义: " << (key == CLASS ? "class" : "struct")
+       << ", 名称: " << (identifier.empty() ? "(匿名类)" : identifier)
        << (memberList->MemberCount() ? "\n" : " (空类)\n");
 
     if (nameSpec)
@@ -124,8 +130,9 @@ void CtorMemberInitializer::Print(std::ostream &os, Indent indent) const
     os << indent << "成员: " << identifier << (isBaseCtor ? " (基类构造)\n" : "\n");
     if (nameSpec)
         nameSpec->Print(os, indent + 1);
-    if (exprList)
-        exprList->Print(os, indent + 1);
+
+    os << indent + 1 << "初始化参数:";
+    exprList->Print(os, indent + 2);
 }
 
 }  // namespace ast

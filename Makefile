@@ -1,5 +1,7 @@
 CXX = g++ -std=c++11 -O0 -g
 
+HEAD = src/ast/node.h src/core/operator.h src/core/typeEnum.h src/core/symbol.h \
+		src/core/semantic.h src/core/type.h
 CORE_SRC = driver symbol type
 AST_SRC = basic expression declaration class statement declarator
 
@@ -20,23 +22,23 @@ $(OBJ_DIR)/yylexer.o: src/lexer/ncc.l $(OBJ_DIR)/yyparser.o
 $(OBJ_DIR)/context.o: src/parser/context.cpp src/parser/context.h
 	$(CXX) -c -o $(OBJ_DIR)/context.o src/parser/context.cpp
 
-$(OBJ_DIR)/%.o: src/core/%.cpp
+$(OBJ_DIR)/%.o: src/core/%.cpp src/core/%.h $(HEAD)
 	$(CXX) -c -o $@ $<
 
-$(OBJ_DIR)/ast_%.o: src/ast/%.cpp $(OBJ_DIR)/yyparser.o src/ast/node.h
+$(OBJ_DIR)/ast_%.o: src/ast/%.cpp $(OBJ_DIR)/yyparser.o $(HEAD)
 	$(CXX) -c -o $@ $<
 
-$(OBJ_DIR)/sem_%.o: src/semantic/%.cpp $(OBJ_DIR)/yyparser.o src/ast/node.h
+$(OBJ_DIR)/sem_%.o: src/semantic/%.cpp $(OBJ_DIR)/yyparser.o $(HEAD)
 	$(CXX) -c -o $@ $<
 
 $(OBJ_DIR)/lextest.exe: $(YY) $(OBJ) src/lexer/lextest.cpp
-	$(CXX) -o $@ $<
+	$(CXX) -o $@ $^
 
 $(OBJ_DIR)/parsetest.exe: $(YY) $(OBJ) src/parser/parsetest.cpp
-	$(CXX) -o $@ $<
+	$(CXX) -o $@ $^
 
 $(OBJ_DIR)/ncc.exe: $(YY) $(OBJ) src/core/ncc.cpp
-	$(CXX) -o $@ $<
+	$(CXX) -o $@ $^
 
 .PHONY: clean
 

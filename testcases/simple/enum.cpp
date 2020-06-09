@@ -5,5 +5,14 @@ enum A {
     DOUBLE
 } a;
 
+enum {
+    RED, GREEN, BLUE
+} rgb = BLUE;
+
 A b;
 const enum A c = FLOAT;
+
+void f() {
+    b = LONG;
+    rgb = GREEN;
+}

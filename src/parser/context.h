@@ -13,7 +13,7 @@ public:
     ParseContext();
 
     bool        PushQueryScope(std::string scopeName);
-    void        EnterAnonymousScope();
+    void        EnterLocalScope();
     void        EnterLastAddedName();
     void        PopQueryScopes();
     void        LeaveScope();

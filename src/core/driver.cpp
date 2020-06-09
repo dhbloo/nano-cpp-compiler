@@ -3,7 +3,10 @@
 #include "../parser/yyparser.h"
 #include "semantic.h"
 
-Driver::Driver(std::ostream &errorStream) : errorStream(errorStream), globalSymtab(nullptr) {}
+Driver::Driver(std::ostream &errorStream)
+    : errorStream(errorStream)
+    , globalSymtab(nullptr)
+{}
 
 bool Driver::Parse(bool isDebugMode)
 {

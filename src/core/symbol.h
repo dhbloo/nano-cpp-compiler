@@ -4,15 +4,7 @@
 
 #include <string>
 #include <unordered_map>
-
-union Constant {
-    // constant value
-    std::intmax_t intVal;
-    double        floatVal;
-    char          charVal;
-    bool          boolVal;
-    std::size_t   strIdx;
-};
+#include <vector>
 
 struct Symbol
 {
@@ -26,8 +18,7 @@ struct Symbol
         PUBLIC     = 8,
         PRIVATE    = 16,
         PROTECTED  = 32,
-        FRIEND     = 64,
-        ACCESSMASK = PUBLIC | PRIVATE | PROTECTED | FRIEND,
+        ACCESSMASK = PUBLIC | PRIVATE | PROTECTED
     };
 
     std::string id;
@@ -36,30 +27,23 @@ struct Symbol
 
     union {
         // constant value
-        Constant constant;
+        int intConstant;
 
         // non constant symbol offset
-        struct
-        {
-            int offset;  // in bytes
-        };
+        int offset;  // in bytes
     };
 };
 
-struct SymbolSet
+class SymbolSet : public std::vector<Symbol *>
 {
+public:
     using It = std::unordered_multimap<std::string, Symbol>::iterator;
 
-    Symbol *single;
-    It      begin, end;
-
-    SymbolSet();
+    SymbolSet() = default;
     SymbolSet(Symbol *symbol);
-    SymbolSet(std::pair<It, It> symbols);
-    Symbol *    Get();
-    std::size_t Count() const;
-
-    operator bool() const;
+    SymbolSet(std::pair<It, It> symbolRange);
+    Symbol *operator->() const;
+            operator Symbol *() const;
 };
 
 class SymbolTable
@@ -71,11 +55,13 @@ public:
 
     // Remove all symbols.
     void ClearAll();
+    void SetStartOffset(int offset);
 
     // If symbol with same name already exists, returns null; otherwise returns
-    // pointer to inserted symbol. For function symbol, if symbol with same name
-    // and same signture already exists, returns null; otherwise returns pointer
-    // to inserted symbol.
+    // pointer to the inserted symbol. For function symbol, if a function symbol
+    // with same name and same signture already exists, returns pointer to that
+    // symbol; if a symbol of other type exists, returns null; otherwise returns
+    // pointer to the inserted symbol.
     Symbol *AddSymbol(Symbol symbol);
     bool    AddClass(std::shared_ptr<ClassDescriptor> classDesc);
     bool    AddEnum(std::shared_ptr<EnumDescriptor> enumDesc);
@@ -86,10 +72,11 @@ public:
     std::shared_ptr<EnumDescriptor>  QueryEnum(std::string id, bool qualified = false);
     Type *                           QueryTypedef(std::string id, bool qualified = false);
 
+    // Note: parent of root is still root
     SymbolTable *       GetParent();
     SymbolTable *       GetRoot();
-    ClassDescriptor *   GetClass();
-    FunctionDescriptor *GetFunction();
+    ClassDescriptor *   GetCurrentClass();
+    FunctionDescriptor *GetCurrentFunction();
     std::string         ScopeName() const;
     int                 ScopeLevel() const;
     int                 ScopeSize() const;  // in bytes
@@ -105,5 +92,5 @@ private:
     std::unordered_map<std::string, std::shared_ptr<EnumDescriptor>>  enumTypes;
     std::unordered_map<std::string, Type>                             typedefs;
 
-    int curSize;
+    int currentOffset;
 };

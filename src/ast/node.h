@@ -611,10 +611,12 @@ struct Declarator : Node
     Ptr<PtrSpecifier> ptrSpec;    // opt
     Ptr<Declarator>   innerDecl;  // opt
 
-    void Append(Ptr<Declarator> decl);
-    void MergePtrSpec(Ptr<PtrSpecifier> ptrSpec);
-    void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void         Append(Ptr<Declarator> decl);
+    void         MergePtrSpec(Ptr<PtrSpecifier> ptrSpec);
+    virtual bool IsFunctionDecl() const;
+    virtual bool IsTypeConversionDecl() const;
+    void         Print(std::ostream &os, Indent indent) const override;
+    void         Analysis(SemanticContext &context) const override;
 };
 
 struct FunctionDeclarator : Declarator
@@ -622,6 +624,7 @@ struct FunctionDeclarator : Declarator
     PtrVec<ParameterDeclaration> params;
     CVQualifier                  funcCV;
 
+    bool IsFunctionDecl() const;
     void Print(std::ostream &os, Indent indent) const override;
     void Analysis(SemanticContext &context) const override;
 };
@@ -638,6 +641,8 @@ struct IdDeclarator : Declarator
 {
     Ptr<IdExpression> id;
 
+    bool IsFunctionDecl() const;
+    bool IsTypeConversionDecl() const;
     void Print(std::ostream &os, Indent indent) const override;
     void Analysis(SemanticContext &context) const override;
 };
@@ -736,7 +741,7 @@ struct MemberList : Node
 struct MemberDeclaration : Node
 {
     Access access;
-    void Analysis(SemanticContext &context) const override;
+    void   Analysis(SemanticContext &context) const override;
 };
 
 struct MemberDefinition : MemberDeclaration
@@ -791,6 +796,7 @@ struct ConversionFunctionId : IdExpression
 
     void        Print(std::ostream &os, Indent indent) const override;
     std::string ComposedId(SemanticContext &context) const override;
+    void        Analysis(SemanticContext &context) const override;
 };
 
 struct CtorMemberInitializer : Node

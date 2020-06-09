@@ -14,7 +14,7 @@ struct A
 
     void print() const;
     int  ret(int a, int b) { return x + y + a + b; }
-    //int  ret(int a) const { return x + y + a; }
+    // int  ret(int a) const { return x + y + a; }
 
     A operator+(const A &other) const
     {
@@ -24,8 +24,11 @@ struct A
         a.z = z + other.z;
         return a;
     }
-    bool operator==(const A &other) { return x == other.x && y == other.y && z == other.z; }
-         operator float() { return z; }
+    bool operator==(const A &other)
+    {
+        return x == other.x && y == other.y && z == other.z;
+    }
+    operator float() { return z; }
 };
 
 class B : public A
@@ -65,12 +68,17 @@ private:
     int      x;
 };
 
-class B::D::E
+struct B::D::E
 {
     A       a;
     B::D    d;
     B::D::F f;
+
+    class H
+    {};
 };
+
+B::D::E::H h;
 
 B::operator float() const
 {
@@ -84,6 +92,16 @@ C       c;
 B::D    d;
 B::D::E f;
 B::D::F f;
+
+struct
+{
+    typedef int D;
+} _struct;
+
+struct
+{
+    typedef int* D;
+} _struct2;
 
 class A xa, &pxa = xa;
 int A::*mpa, B::D::*mpdb, A::**mppa = &mpa, *A::*pmpa = &A::i;
