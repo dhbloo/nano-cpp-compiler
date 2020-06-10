@@ -77,7 +77,7 @@ bool ElaboratedTypeSpecifier::operator==(const ElaboratedTypeSpecifier &n2)
 void BlockDeclaration::Print(std::ostream &os, Indent indent) const
 {
     declSpec->Print(os, indent);
-    for (std::size_t i = 0; i < initDeclList.size(); i++) {
+    for (size_t i = 0; i < initDeclList.size(); i++) {
         os << indent << "声明符[" << i << "]:\n";
 
         initDeclList[i].declarator->Print(os, indent + 1);
@@ -163,7 +163,7 @@ void EnumSpecifier::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "枚举名: " << (identifier.empty() ? "(匿名枚举)" : identifier)
        << '\n';
-    for (std::size_t i = 0; i < enumList.size(); i++) {
+    for (size_t i = 0; i < enumList.size(); i++) {
         os << indent << "枚举值[" << i << "], 名称: " << enumList[i].first << '\n';
 
         if (enumList[i].second)

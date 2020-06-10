@@ -144,6 +144,7 @@ void BinaryExpression::Analysis(SemanticContext &context) const
 
     case BinaryOp::DOT:
     case BinaryOp::DOTSTAR:
+        // If object is r-value, then its member is set to r-value
         if (!context.type.IsRef() && rightContext.type.IsRef())
             rightContext.type = rightContext.type.RemoveRef();
     case BinaryOp::ARROW:
@@ -160,13 +161,26 @@ void BinaryExpression::Analysis(SemanticContext &context) const
         context.expr.constant = rightContext.expr.constant;
         break;
 
+    case BinaryOp::MOD:
+    case BinaryOp::SHL:
+    case BinaryOp::SHR:
+    case BinaryOp::AND:
+    case BinaryOp::XOR:
+    case BinaryOp::OR:
+        if (context.type.Decay().IsSimple(TypeClass::FUNDTYPE)
+            && (context.type.fundType == FundType::FLOAT
+                || context.type.fundType == FundType::DOUBLE))
+            throw SemanticError("invalid argument type '" + context.type.Decay().Name()
+                                    + "' to unary expression",
+                                srcLocation);
+
     default:
         // Convert to arithmetic type
         context.type      = context.type.Decay();
         rightContext.type = rightContext.type.Decay();
         Type commonType   = context.type.ArithmeticConvert(rightContext.type);
 
-        // TODO: more binary operand type
+        // TODO: more binary operand type(pointer...)
 
         if (!context.type.IsConvertibleTo(commonType, &context.expr.constant)
             || !rightContext.type.IsConvertibleTo(commonType,
@@ -180,8 +194,10 @@ void BinaryExpression::Analysis(SemanticContext &context) const
         context.symbolSet = {};
 
         if (context.expr.isConstant &= rightContext.expr.isConstant) {
-            // TODO: binary constant calc
-            context.expr.isConstant = false;
+            context.expr.constant =
+                context.expr.constant.BinaryOpResult(commonType.fundType,
+                                                     op,
+                                                     rightContext.expr.constant);
         }
         break;
     }
@@ -194,7 +210,9 @@ void CastExpression::Analysis(SemanticContext &context) const
 
     expr->Analysis(context);
 
-    // TODO: check cast
+    if (!context.type.IsConvertibleTo(castType, &context.expr.constant)) {
+        // TODO: check cast
+    }
 
     context.type = castType;
 }
@@ -235,7 +253,8 @@ void UnaryExpression::Analysis(SemanticContext &context) const
             //         context.type.Function()->funcScope->GetCurrentClass()});
             // else
             assert(context.symbolSet);
-            if (context.symbolSet.Scope()->GetCurrentClass()) {
+            if (context.symbolSet.Scope()
+                && context.symbolSet.Scope()->GetCurrentClass()) {
                 context.type.AddPtrDesc(
                     Type::PtrDescriptor {PtrType::CLASSPTR,
                                          CVQualifier::NONE,
@@ -271,21 +290,33 @@ void UnaryExpression::Analysis(SemanticContext &context) const
         context.type = context.type.Decay();
 
         if (!context.type.IsConvertibleTo(FundType::BOOL, &context.expr.constant))
-            throw SemanticError("invalid argumrnt type '" + context.type.Name()
+            throw SemanticError("invalid argument type '" + context.type.Name()
                                     + "' to unary expression",
                                 srcLocation);
 
+        context.expr.constant =
+            context.expr.constant.UnaryOpResult(FundType::BOOL, UnaryOp::LOGINOT);
         context.type = {FundType::BOOL};
         break;
 
+    case UnaryOp::NOT:
+        if (context.type.Decay().IsSimple(TypeClass::FUNDTYPE)
+            && (context.type.fundType == FundType::FLOAT
+                || context.type.fundType == FundType::DOUBLE))
+            throw SemanticError("invalid argument type '" + context.type.Decay().Name()
+                                    + "' to unary expression",
+                                srcLocation);
     default:
         context.type   = context.type.Decay();
         Type arithType = context.type.ArithmeticConvert(FundType::INT);
 
         if (!context.type.IsConvertibleTo(arithType, &context.expr.constant))
-            throw SemanticError("invalid argumrnt type '" + context.type.Name()
+            throw SemanticError("invalid argument type '" + context.type.Name()
                                     + "' to unary expression",
                                 srcLocation);
+
+        context.expr.constant =
+            context.expr.constant.UnaryOpResult(arithType.fundType, op);
         context.type = arithType;
         break;
     }
@@ -295,7 +326,8 @@ void CallExpression::Analysis(SemanticContext &context) const
 {
     funcExpr->Analysis(context);
 
-    if (!context.type.RemovePtr().IsSimple(TypeClass::FUNCTION))
+    context.type = context.type.RemoveRef().RemovePtr();
+    if (!context.type.IsSimple(TypeClass::FUNCTION))
         throw SemanticError("called object type '" + context.type.Name()
                                 + "' is not a function or function pointer",
                             srcLocation);
@@ -368,12 +400,15 @@ void DeleteExpression::Analysis(SemanticContext &context) const
 
 void IdExpression::Analysis(SemanticContext &context) const
 {
-    SymbolTable *symtab    = nullptr;
-    bool         qualified = false;
+    SymbolTable *symtab       = nullptr;
+    bool         qualified    = false;
+    bool         preQualified = false;
+    int          preOffset;
 
     if (context.qualifiedScope) {
         std::swap(symtab, context.qualifiedScope);
-        qualified = true;
+        preOffset    = context.symbolSet->offset;
+        preQualified = qualified = true;
     }
     else {
         symtab = context.symtab;
@@ -452,6 +487,14 @@ void IdExpression::Analysis(SemanticContext &context) const
         // Id expression is always a l-value (function is l-value already)
         if (!context.type.IsRef() && !context.type.IsSimple(TypeClass::FUNCTION))
             context.type.AddPtrDesc(Type::PtrDescriptor {PtrType::REF});
+
+        // PreQualified symbol is a real symbol + offset symbol (eg. "a.x")
+        // Its offset is the offset of the real symbol + an offset
+        if (preQualified) {
+            context.newSymbol = *context.symbolSet;
+            context.symbolSet = {&context.newSymbol, nullptr};
+            context.newSymbol.offset += preOffset;
+        }
     }
 }
 
@@ -529,14 +572,16 @@ void ExpressionList::Analysis(SemanticContext &context) const
         if (context.type.IsSimple(TypeClass::FUNCTION)) {
             auto funcDesc = context.type.Function();
 
+            size_t startIdx = funcDesc->IsNonStaticMember();
+
             // TODO: default parameter match
-            if (funcDesc->paramList.size() != exprList.size())
+            if (funcDesc->paramList.size() != exprList.size() + startIdx)
                 throw SemanticError("no matching function for call to '"
                                         + context.symbolSet->id + "'",
                                     srcLocation);
 
-            for (std::size_t i = 0; i < exprList.size(); i++) {
-                exprList[i]->Analysis(context);
+            for (size_t i = startIdx; i < funcDesc->paramList.size(); i++) {
+                exprList[i - startIdx]->Analysis(context);
                 if (!context.type.IsConvertibleTo(funcDesc->paramList[i].symbol->type))
                     throw SemanticError("expression type '" + context.type.Name()
                                             + "' does not fit argument type '"

@@ -83,7 +83,7 @@ void ArrayDeclarator::Analysis(SemanticContext &context) const
     if (innerDecl)
         innerDecl->Analysis(context);
 
-    std::size_t arraySize = 0;
+    size_t arraySize = 0;
 
     if (size) {
         Type arrayType     = context.type;
@@ -103,7 +103,7 @@ void ArrayDeclarator::Analysis(SemanticContext &context) const
         if (context.expr.constant.intVal <= 0)
             throw SemanticError("array declared with non positive size", srcLocation);
         else
-            arraySize = (std::size_t)context.expr.constant.intVal;
+            arraySize = (size_t)context.expr.constant.intVal;
 
         context.decl = lastDecl;
         context.type = arrayType;
@@ -129,8 +129,10 @@ void ArrayDeclarator::Analysis(SemanticContext &context) const
                             srcLocation);
 
     // Array with unknown bound decay to pointer
-    if (arrayDesc.size == 0)
+    if (arrayDesc.size == 0) {
+        context.type.ptrDescList = arrayDesc.ptrDescList;
         context.type.AddPtrDesc(Type::PtrDescriptor {PtrType::PTR});
+    }
     else
         context.type.arrayDescList.push_back(std::move(arrayDesc));
 }
@@ -138,8 +140,11 @@ void ArrayDeclarator::Analysis(SemanticContext &context) const
 void IdDeclarator::Analysis(SemanticContext &context) const
 {
     SymbolTable *insymtab = context.symtab;
-    if (context.decl.isFriend)
+    if (context.decl.isFriend) {
         insymtab = insymtab->GetParent();
+        context.decl.symbolAccessAttr =
+            Symbol::Attribute(context.decl.symbolAccessAttr & ~Symbol::ACCESSMASK);
+    }
 
     if (innerDecl)
         innerDecl->Analysis(context);
@@ -153,6 +158,10 @@ void IdDeclarator::Analysis(SemanticContext &context) const
         && !context.type.IsComplete())
         throw SemanticError("variable has incomplete type '" + context.type.Name() + "'",
                             srcLocation);
+
+    // Parameter type must be decayed
+    if (context.decl.state == DeclState::PARAMDECL)
+        context.type = context.type.Decay();
 
     id->Analysis(context);
 
@@ -221,12 +230,14 @@ void ParameterDeclaration::Analysis(SemanticContext &context) const
 
     Symbol *paramSymbol = nullptr;
     if (decl) {
+        context.symbolSet = {};
         decl->Analysis(context);
         paramSymbol = context.symbolSet;
     }
 
     // Unnamed parameter are added directly without check previous symbol
     if (!paramSymbol) {
+        context.type      = context.type.Decay();
         context.newSymbol = {"", context.type};
         paramSymbol       = context.symtab->AddSymbol(context.newSymbol);
     }

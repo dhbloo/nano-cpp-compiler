@@ -127,7 +127,7 @@ void InitializableNew::Print(std::ostream &os, Indent indent) const
         ptrSpec->Print(os, indent + 1);
     }
 
-    for (std::size_t i = 0; i < arraySizes.size(); i++) {
+    for (size_t i = 0; i < arraySizes.size(); i++) {
         os << indent + 1 << "数组大小[" << i << "]:\n";
         arraySizes[i]->Print(os, indent + 2);
     }
@@ -190,7 +190,7 @@ void ExpressionList::Print(std::ostream &os, Indent indent) const
 {
     os << (exprList.empty() ? " (空)\n" : "\n");
 
-    for (std::size_t i = 0; i < exprList.size(); i++) {
+    for (size_t i = 0; i < exprList.size(); i++) {
         os << indent << "表达式[" << i << "]:\n";
         exprList[i]->Print(os, indent + 1);
     }

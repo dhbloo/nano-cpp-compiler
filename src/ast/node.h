@@ -339,7 +339,7 @@ struct LiteralExpression : Expression
 
 struct IntLiteral : LiteralExpression
 {
-    std::intmax_t value;
+    intmax_t value;
 
     void Print(std::ostream &os, Indent indent) const override;
     void Analysis(SemanticContext &context) const override;
@@ -738,7 +738,7 @@ struct MemberList : Node
 {
     PtrVec<MemberDeclaration> members, defaultMembers;
 
-    std::size_t MemberCount() const;
+    size_t MemberCount() const;
     void        Reverse();
     void        MoveDefaultTo(Access access);
     void        Print(std::ostream &os, Indent indent) const override;

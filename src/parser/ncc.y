@@ -42,7 +42,7 @@
 %token <std::string> IDENTIFIER CLASSNAME ENUMNAME TYPEDEFNAME
 
 /* Literal */
-%token <std::intmax_t> INTVAL
+%token <intmax_t> INTVAL
 %token <double> FLOATVAL
 %token <char> CHARVAL
 %token <std::string> STRVAL

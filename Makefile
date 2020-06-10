@@ -1,8 +1,8 @@
 CXX = g++ -std=c++11 -O0 -g
 
 HEAD = src/ast/node.h src/core/operator.h src/core/typeEnum.h src/core/symbol.h \
-		src/core/semantic.h src/core/type.h
-CORE_SRC = driver symbol type
+		src/core/semantic.h src/core/type.h src/core/constant.h
+CORE_SRC = driver symbol type constant
 AST_SRC = basic expression declaration class statement declarator
 
 OBJ_DIR = bin

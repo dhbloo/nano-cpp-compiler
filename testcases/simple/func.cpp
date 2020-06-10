@@ -23,11 +23,11 @@ struct B : A
     virtual void f();
 };
 
-enum E { CON1, CON2 } b;
+enum E { CON1, CON2, CON3 = CON2 * 2 } b;
 typedef int *INTP;
 int          g = 10;
-int          a[10];
-const char   str[10] = "123456789";
+int          a[5 + 5];
+const char   str[5 * 2] = "123456789";
 
 int f()
 {

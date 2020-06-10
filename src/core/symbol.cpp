@@ -102,17 +102,22 @@ SymbolSet SymbolTable::AddSymbol(Symbol symbol)
                             continue;
                     }
 
-                    if (funcSym->type.cv == symbol.type.cv
-                        && funcSym->type.Function()->HasSameSignatureWith(
-                            *symbol.type.Function())) {
+                    if (funcSym->type.Function()->HasSameSignatureWith(
+                            *symbol.type.Function(), true)) {
                         // Found an identical function symbol (same name and signature)
                         if (isInCurScope) {
                             // Redeclaration of member function in the same scope is not
                             // allowed
                             if (funcSym->IsMember())
                                 return {};
-                            else
+                            else {
+                                // if function does not have body difinition,
+                                // replace its type
+                                if (!funcSym->type.Function()->hasBody)
+                                    funcSym->type = symbol.type;
+
                                 return {funcSym, this};
+                            }
                         }
                         else {
                             // If the found symbol is from base class, our new symbol will
@@ -123,7 +128,6 @@ SymbolSet SymbolTable::AddSymbol(Symbol symbol)
                             if (funcSym->Attr() == Symbol::VIRTUAL) {
                                 // Add virtual attribute for overriding virtual function,
                                 // if it doesn't have virtual attribute
-
                                 if (symbol.Attr() != Symbol::VIRTUAL)
                                     symbol.SetAttr(Symbol::VIRTUAL);
 

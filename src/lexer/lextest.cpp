@@ -25,7 +25,7 @@ std::string SemanticValueToString(int t, const YYSTYPE &v)
 {
     switch (t) {
     case yy::parser::token::IDENTIFIER: return v.as<std::string>();
-    case yy::parser::token::INTVAL: return std::to_string(v.as<std::intmax_t>());
+    case yy::parser::token::INTVAL: return std::to_string(v.as<intmax_t>());
     case yy::parser::token::FLOATVAL: return std::to_string(v.as<double>());
     case yy::parser::token::CHARVAL: return std::string("\'") + v.as<char>() + "\'";
     case yy::parser::token::STRVAL: return "\"" + v.as<std::string>() + "\"";
@@ -53,7 +53,7 @@ int main(int argc, char *argv[])
     int          token;
     YYSTYPE      value;
     YYLTYPE      location;
-    std::size_t  index = 1;
+    size_t  index = 1;
     ParseContext pc;
 
     std::cout << std::string(80, '-') << '\n';

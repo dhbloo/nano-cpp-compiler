@@ -13,7 +13,7 @@ void ClassSpecifier::MoveDefaultMember()
         baseSpec->access = defaultAccess;
 }
 
-std::size_t MemberList::MemberCount() const
+size_t MemberList::MemberCount() const
 {
     return members.size();
 }
@@ -62,7 +62,7 @@ void MemberList::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "类成员列表:\n";
 
-    for (std::size_t i = 0; i < members.size(); i++) {
+    for (size_t i = 0; i < members.size(); i++) {
         os << indent + 1 << "成员[" << i << "]: ";
         switch (members[i]->access) {
         case Access::PRIVATE: os << "(私有)"; break;
@@ -81,7 +81,7 @@ void MemberDefinition::Print(std::ostream &os, Indent indent) const
     if (declSpec)
         declSpec->Print(os, indent + 1);
 
-    for (std::size_t i = 0; i < decls.size(); i++) {
+    for (size_t i = 0; i < decls.size(); i++) {
         os << indent + 1 << "定义[" << i << "]:";
         decls[i]->Print(os, indent + 1);
     }

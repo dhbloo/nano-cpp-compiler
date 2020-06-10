@@ -64,7 +64,7 @@ bool IdDeclarator::IsTypeConversionDecl() const
 void PtrSpecifier::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "类型指针修饰:\n";
-    for (std::size_t i = 0; i < ptrList.size(); i++) {
+    for (size_t i = 0; i < ptrList.size(); i++) {
         os << indent + 1 << "修饰[" << i << "]: ";
         switch (ptrList[i].ptrType) {
         case PtrType::PTR: os << "指针"; break;
@@ -104,7 +104,7 @@ void FunctionDeclarator::Print(std::ostream &os, Indent indent) const
         innerDecl->Print(os, indent + 2);
     }
 
-    for (std::size_t i = 0; i < params.size(); i++) {
+    for (size_t i = 0; i < params.size(); i++) {
         os << indent + 1 << "参数[" << i << "]:\n";
         params[i]->Print(os, indent + 2);
     }
@@ -172,7 +172,7 @@ void FunctionDefinition::Print(std::ostream &os, Indent indent) const
 
     declarator->Print(os, indent + 1);
 
-    for (std::size_t i = 0; i < ctorInitList.size(); i++) {
+    for (size_t i = 0; i < ctorInitList.size(); i++) {
         os << indent + 1 << "构造函数初始化[" << i << "]:\n";
         ctorInitList[i]->Print(os, indent + 2);
     }
@@ -190,7 +190,7 @@ void AssignmentInitializer::Print(std::ostream &os, Indent indent) const
 void ListInitializer::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "列表初始化:\n";
-    for (std::size_t i = 0; i < initList.size(); i++) {
+    for (size_t i = 0; i < initList.size(); i++) {
         os << indent + 1 << "表项[" << i << "]:\n";
         initList[i]->Print(os, indent + 2);
     }

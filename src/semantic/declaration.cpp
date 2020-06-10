@@ -193,7 +193,20 @@ void EnumSpecifier::Analysis(SemanticContext &context) const
         Symbol symbol {e.first, enumType, Symbol::CONSTANT};
 
         if (e.second) {
-            e.second->Analysis(context);
+            auto lastDecl      = context.decl;
+            context.decl.state = DeclState::NODECL;
+
+            try {
+                e.second->Analysis(context);
+                context.decl = lastDecl;
+            }
+            catch (SemanticError error) {
+                context.decl = lastDecl;
+                context.errorStream << error;
+                context.errCnt++;
+                continue;
+            }
+
             if (!context.expr.isConstant)
                 throw SemanticError("enum expression is not integral constant",
                                     srcLocation);

@@ -94,7 +94,7 @@ bool Type::ArrayDescriptor::operator==(const ArrayDescriptor &rhs) const
     if (size != rhs.size || ptrDescList.size() != rhs.ptrDescList.size())
         return false;
 
-    for (std::size_t i = 0; i < ptrDescList.size(); i++) {
+    for (size_t i = 0; i < ptrDescList.size(); i++) {
         if (!(ptrDescList[i] == rhs.ptrDescList[i]))
             return false;
     }
@@ -180,8 +180,8 @@ std::string Type::Name(std::string innerName) const
             name = "(" + postfix + ")";
 
         name += "(";
-        std::size_t startIdx = Function()->IsNonStaticMember() ? 1 : 0;
-        for (std::size_t i = startIdx; i < Function()->paramList.size(); i++) {
+        size_t startIdx = Function()->IsNonStaticMember() ? 1 : 0;
+        for (size_t i = startIdx; i < Function()->paramList.size(); i++) {
             if (i > startIdx)
                 name += ", ";
             name += Function()->paramList[i].symbol->type.Name();
@@ -290,40 +290,9 @@ bool Type::IsConvertibleTo(const Type &target, Constant *constant) const
     if (t.IsSimple(TypeClass::FUNDTYPE) && target.IsSimple(TypeClass::FUNDTYPE)) {
         if (t.fundType == FundType::VOID)
             return false;
-        else if (constant) {
-            bool          isDecimal = false;
-            std::intmax_t integral;
-            double        decimal;
+        else if (constant)
+            *constant = constant->Convert(t.fundType, target.fundType);
 
-            switch (fundType) {
-            case FundType::BOOL: integral = constant->boolVal; break;
-            case FundType::CHAR:
-            case FundType::UCHAR: integral = constant->charVal; break;
-            case FundType::FLOAT:
-            case FundType::DOUBLE:
-                decimal   = constant->floatVal;
-                isDecimal = true;
-                break;
-            default: integral = constant->intVal; break;
-            }
-
-            switch (target.fundType) {
-            case FundType::BOOL:
-                constant->boolVal = (bool)(isDecimal ? decimal : integral);
-                break;
-            case FundType::CHAR:
-            case FundType::UCHAR:
-                constant->charVal = (char)(isDecimal ? decimal : integral);
-                break;
-            case FundType::FLOAT:
-            case FundType::DOUBLE:
-                constant->floatVal = (double)(isDecimal ? decimal : integral);
-                break;
-            default:
-                constant->intVal = (std::intmax_t)(isDecimal ? decimal : integral);
-                break;
-            }
-        }
         return true;
     }
     // 4, 10. integer promotion: enum to int & bool conversion: enum to bool
@@ -550,7 +519,7 @@ bool Type::IsArray() const
     return ptrDescList.empty() && !arrayDescList.empty();
 }
 
-std::size_t Type::ArraySize() const
+size_t Type::ArraySize() const
 {
     return IsArray() ? arrayDescList.back().size : 0;
 }
@@ -602,18 +571,24 @@ Type Type::Decay() const
     return t;
 }
 
-Type Type::ArithmeticConvert(const Type &t2) const
+Type Type::ArithmeticConvert(Type t2) const
 {
-    if (IsSimple(TypeClass::FUNDTYPE) && t2.IsSimple(TypeClass::FUNDTYPE)) {
-        if (fundType == FundType::DOUBLE || t2.fundType == FundType::DOUBLE)
+    Type t1 = *this;
+
+    if (t1.IsSimple(TypeClass::ENUM))
+        t1 = {FundType::INT};
+    if (t2.IsSimple(TypeClass::ENUM))
+        t2 = {FundType::INT};
+    if (t1.IsSimple(TypeClass::FUNDTYPE) && t2.IsSimple(TypeClass::FUNDTYPE)) {
+        if (t1.fundType == FundType::DOUBLE || t2.fundType == FundType::DOUBLE)
             return {FundType::DOUBLE};
-        else if (fundType == FundType::FLOAT || t2.fundType == FundType::FLOAT)
+        else if (t1.fundType == FundType::FLOAT || t2.fundType == FundType::FLOAT)
             return {FundType::FLOAT};
-        else if (fundType == FundType::ULONG || t2.fundType == FundType::ULONG)
+        else if (t1.fundType == FundType::ULONG || t2.fundType == FundType::ULONG)
             return {FundType::ULONG};
-        else if (fundType == FundType::LONG || t2.fundType == FundType::LONG)
+        else if (t1.fundType == FundType::LONG || t2.fundType == FundType::LONG)
             return {FundType::LONG};
-        else if (fundType == FundType::UINT || t2.fundType == FundType::UINT)
+        else if (t1.fundType == FundType::UINT || t2.fundType == FundType::UINT)
             return {FundType::UINT};
     }
 
@@ -627,18 +602,18 @@ Type Type::RemoveCV() const
     return t;
 }
 
-Type Type::RemovePtr() const
-{
-    Type t = *this;
-    if (t.IsPtr())
-        t.ptrDescList.pop_back();
-    return t;
-}
-
 Type Type::RemoveRef() const
 {
     Type t = *this;
     if (t.IsRef())
+        t.ptrDescList.pop_back();
+    return t;
+}
+
+Type Type::RemovePtr() const
+{
+    Type t = *this;
+    if (t.IsPtr())
         t.ptrDescList.pop_back();
     return t;
 }
@@ -656,12 +631,12 @@ FunctionDescriptor::FunctionDescriptor(Type retType)
     : retType(retType)
     , hasBody(false)
     , friendClass(nullptr)
+    , defSymbol(nullptr)
 {}
 
 bool FunctionDescriptor::IsMember() const
 {
-    assert(defSymbol);
-    return defSymbol->IsMember();
+    return defSymbol && defSymbol->IsMember();
 }
 
 bool FunctionDescriptor::IsNonStaticMember() const
@@ -675,12 +650,13 @@ CVQualifier FunctionDescriptor::MemberCV() const
     return defSymbol->type.cv;
 }
 
-bool FunctionDescriptor::HasSameSignatureWith(const FunctionDescriptor &func)
+bool FunctionDescriptor::HasSameSignatureWith(const FunctionDescriptor &func,
+                                              bool                      ignoreFirst)
 {
     if (paramList.size() != func.paramList.size())
         return false;
 
-    for (size_t i = 0; i < paramList.size(); i++) {
+    for (size_t i = ignoreFirst ? 1 : 0; i < paramList.size(); i++) {
         if (paramList[i].symbol->type != func.paramList[i].symbol->type)
             return false;
     }

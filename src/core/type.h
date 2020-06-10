@@ -30,7 +30,7 @@ struct Type
 
     struct ArrayDescriptor
     {
-        std::size_t                size;
+        size_t                     size;
         std::vector<PtrDescriptor> ptrDescList;
 
         bool operator==(const ArrayDescriptor &rhs) const;
@@ -93,7 +93,7 @@ struct Type
     // Returns if the type is an array (T[])
     bool IsArray() const;
     // Returns array size if the type is an array, otherwise returns 0
-    std::size_t ArraySize() const;
+    size_t ArraySize() const;
 
     /* Type modifiers */
 
@@ -105,11 +105,11 @@ struct Type
     // array-to-pointer, and function-to-pointer implicit conversions to the type
     Type Decay() const;
     // Convert two arithmetic type using 'usual arithmetic conversions' rules
-    Type ArithmeticConvert(const Type &t2) const;
+    Type ArithmeticConvert(Type t2) const;
 
     Type RemoveCV() const;
-    Type RemovePtr() const;
     Type RemoveRef() const;
+    Type RemovePtr() const;
 };
 
 struct ClassDescriptor : TypeDescriptor
@@ -154,7 +154,7 @@ struct FunctionDescriptor : TypeDescriptor
     // a member, always returns CVQualifier::NONE
     CVQualifier MemberCV() const;
     // Returns true if both parameter lists are the same
-    bool HasSameSignatureWith(const FunctionDescriptor &func);
+    bool HasSameSignatureWith(const FunctionDescriptor &func, bool ignoreFirst = false);
     // Returns true if both signatures and return types are the same
     bool operator==(const FunctionDescriptor &func);
 };

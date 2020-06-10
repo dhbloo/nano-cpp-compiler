@@ -97,9 +97,6 @@ void MemberList::Analysis(SemanticContext &context) const
 
 void MemberDeclaration::Analysis(SemanticContext &context) const
 {
-    if (context.decl.isFriend)
-        return;
-
     switch (access) {
     case Access::PRIVATE: context.decl.symbolAccessAttr = Symbol::PRIVATE; break;
     case Access::PROTECTED: context.decl.symbolAccessAttr = Symbol::PROTECTED; break;

@@ -9,7 +9,7 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/ncc.exe",
-            "args": ["<${workspaceFolder}/testcases/simple/class.cpp"],
+            "args": ["<${workspaceFolder}/testcases/simple/type.cpp"],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

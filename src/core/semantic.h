@@ -2,6 +2,7 @@
 
 #include "../parser/yylocation.h"
 #include "symbol.h"
+#include "constant.h"
 
 #include <list>
 #include <ostream>
@@ -12,15 +13,6 @@ enum class DeclState : std::uint8_t {
     MINDECL,    // new symbol (no class or enum definition)
     LOCALDECL,  // new symbol (no static data member)
     FULLDECL    // new symbol
-};
-
-union Constant {
-    // constant value
-    std::intmax_t intVal;
-    double        floatVal;
-    char          charVal;
-    bool          boolVal;
-    std::size_t   strIdx;
 };
 
 struct SemanticContext

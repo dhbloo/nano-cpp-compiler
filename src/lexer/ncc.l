@@ -66,10 +66,10 @@ boolean_literal         "false"|"true"
 \#.*\n                  { throw yy::parser::syntax_error(*yylloc, "preprocessing unsupported: " + std::string(yytext, yyleng)); }
 
 {decimal_literal}       { char* p_end;
-                          yylval->emplace<std::intmax_t>(std::strtoll(yytext, &p_end, 10)); 
+                          yylval->emplace<intmax_t>(std::strtoll(yytext, &p_end, 10)); 
                           return yy::parser::token::INTVAL; }
 {hexadecimal_literal}   { char* p_end;
-                          yylval->emplace<std::intmax_t>(std::strtoll(yytext, &p_end, 16)); 
+                          yylval->emplace<intmax_t>(std::strtoll(yytext, &p_end, 16)); 
                           return yy::parser::token::INTVAL; }
 {float_literal}         { char* p_end;
                           yylval->emplace<double>(std::strtod(yytext, &p_end)); 
