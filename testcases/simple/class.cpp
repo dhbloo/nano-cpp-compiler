@@ -14,7 +14,7 @@ struct A
 
     void print() const;
     int  ret(int a, int b) { return x + y + a + b; }
-    // int  ret(int a) const { return x + y + a; }
+    int  ret(int a) const { return x + y + a; }
 
     A operator+(const A &other) const
     {
@@ -45,22 +45,23 @@ public:
     B();
     virtual ~B();
     operator float() const;
-    operator int() { return d.a; };
+    operator int() { return d->a; };
 
 private:
-    D d;
+    D *d;
     friend A;
-    friend const D &get_d(const B &b) { return b.d; }
+    friend const D &get_d(const B &b) { return *b.d; }
 };
 
 class C : private B::D
 {
-    float  z = 1.0f;
+    float  z;
     double w;
 
 public:
-    C(const A *pa, int px) : B::D(1), a(pa) { x = px + 1; }
+    // C(const A *pa, int px) : B::D(1), a(pa) { x = px + 1; }
     ~C() { x = 0; }
+    const float get_z() const { return this->z; }
     const B &get_b() const { return (const B &)*this; }
 
 private:
@@ -80,6 +81,13 @@ struct B::D::E
 
 B::D::E::H h;
 
+B::B() : d(0) {}
+
+B::~B()
+{
+    d->a = 0;
+}
+
 B::operator float() const
 {
     return 2.5f;
@@ -87,10 +95,10 @@ B::operator float() const
 
 int     A::a = 10;
 A       a, *pa, **ppa;
-B       b, ab[10], ab[10][20];
+B       b, ab[10], abc[10][20];
 C       c;
 B::D    d;
-B::D::E f;
+B::D::E e;
 B::D::F f;
 
 struct
@@ -100,7 +108,7 @@ struct
 
 struct
 {
-    typedef int* D;
+    typedef int *D;
 } _struct2;
 
 class A xa, &pxa = xa;

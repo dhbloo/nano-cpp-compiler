@@ -123,6 +123,8 @@ void ConversionFunctionId::Print(std::ostream &os, Indent indent) const
     typeSpec->Print(os, indent + 1);
     if (ptrSpec)
         ptrSpec->Print(os, indent + 1);
+    if (nameSpec)
+        nameSpec->Print(os, indent + 1);
 }
 
 void CtorMemberInitializer::Print(std::ostream &os, Indent indent) const

@@ -5,16 +5,42 @@
 #include <iomanip>
 #include <ostream>
 
-SymbolSet::SymbolSet(Symbol *symbol)
+Symbol::Attribute Symbol::Attr() const
 {
-    assert(symbol);
-    push_back(symbol);
+    return Attribute(accessAttr & ~ACCESSMASK);
 }
 
-SymbolSet::SymbolSet(std::pair<It, It> symbolRange)
+Symbol::Attribute Symbol::Access() const
+{
+    return Attribute(accessAttr & ACCESSMASK);
+}
+
+bool Symbol::IsMember() const
+{
+    return (accessAttr & ACCESSMASK) != 0;
+}
+
+void Symbol::SetAttr(Attribute attr)
+{
+    accessAttr = Attribute(attr | Access());
+}
+
+SymbolSet::SymbolSet(Symbol *symbol, SymbolTable *scope) : symbolScope(scope)
+{
+    if (symbol)
+        push_back(symbol);
+}
+
+SymbolSet::SymbolSet(std::pair<It, It> symbolRange, SymbolTable *scope)
+    : symbolScope(scope)
 {
     for (It it = symbolRange.first; it != symbolRange.second; it++)
         push_back(&it->second);
+}
+
+SymbolTable *SymbolSet::Scope() const
+{
+    return symbolScope;
 }
 
 Symbol *SymbolSet::operator->() const
@@ -49,7 +75,7 @@ void SymbolTable::SetStartOffset(int offset)
     currentOffset = offset;
 }
 
-Symbol *SymbolTable::AddSymbol(Symbol symbol)
+SymbolSet SymbolTable::AddSymbol(Symbol symbol)
 {
     if (!symbol.id.empty()) {
         SymbolSet set = QuerySymbol(symbol.id, true);
@@ -71,7 +97,7 @@ Symbol *SymbolTable::AddSymbol(Symbol symbol)
                     if (!funcSym->type.IsSimple(TypeClass::FUNCTION)) {
                         // Allow derived class override variable from base class
                         if (isInCurScope)
-                            return nullptr;
+                            return {};
                         else
                             continue;
                     }
@@ -83,29 +109,23 @@ Symbol *SymbolTable::AddSymbol(Symbol symbol)
                         if (isInCurScope) {
                             // Redeclaration of member function in the same scope is not
                             // allowed
-                            if (funcSym->attr & Symbol::ACCESSMASK)
-                                return nullptr;
+                            if (funcSym->IsMember())
+                                return {};
                             else
-                                return funcSym;
+                                return {funcSym, this};
                         }
                         else {
                             // If the found symbol is from base class, our new symbol will
                             // override it. Check whether the found symbol is virtual, if
                             // so, make inserted symbol virtual too. Otherwise insert new
                             // symbol
-                            auto overrideSymbolAttr =
-                                Symbol::Attribute(funcSym->attr & ~Symbol::ACCESSMASK);
 
-                            if (overrideSymbolAttr == Symbol::VIRTUAL) {
+                            if (funcSym->Attr() == Symbol::VIRTUAL) {
                                 // Add virtual attribute for overriding virtual function,
                                 // if it doesn't have virtual attribute
-                                auto newSymbolAttr =
-                                    Symbol::Attribute(symbol.attr & ~Symbol::ACCESSMASK);
 
-                                if (newSymbolAttr != Symbol::VIRTUAL)
-                                    symbol.attr =
-                                        Symbol::Attribute(symbol.attr & Symbol::ACCESSMASK
-                                                          | Symbol::VIRTUAL);
+                                if (symbol.Attr() != Symbol::VIRTUAL)
+                                    symbol.SetAttr(Symbol::VIRTUAL);
 
                                 break;
                             }
@@ -119,12 +139,12 @@ Symbol *SymbolTable::AddSymbol(Symbol symbol)
             else {
                 // Allow derived class override variable from base class
                 if (isInCurScope)
-                    return nullptr;
+                    return {};
             }
         }
     }
 
-    if (symbol.attr != Symbol::CONSTANT) {
+    if (symbol.Attr() != Symbol::CONSTANT) {
         // Set symbol offset to current scope size
         // Offset alignment: alignment amount depends on size of
         // symbol type and max alignment requirement is 8 bytes.
@@ -142,7 +162,7 @@ Symbol *SymbolTable::AddSymbol(Symbol symbol)
 
 insert:
     auto it = symbols.insert(std::make_pair(symbol.id, symbol));
-    return &it->second;
+    return {&it->second, this};
 }
 
 bool SymbolTable::AddClass(std::shared_ptr<ClassDescriptor> classDesc)
@@ -177,14 +197,14 @@ SymbolSet SymbolTable::QuerySymbol(std::string id, bool qualified)
     for (SymbolTable *p = this; p; p = p->parent) {
         auto range = p->symbols.equal_range(id);
         if (range.first != symbols.end())
-            return SymbolSet {range};
+            return {range, this};
 
         if (p->classDesc) {
             for (ClassDescriptor *pc = p->classDesc->baseClassDesc; pc;
                  pc                  = pc->baseClassDesc) {
                 range = pc->memberTable->symbols.equal_range(id);
                 if (range.first != symbols.end())
-                    return SymbolSet {range};
+                    return {range, this};
             }
         }
 
@@ -324,7 +344,7 @@ void SymbolTable::Print(std::ostream &os) const
 
     if (!symbols.empty()) {
         os << "符号, 共 " << symbols.size() << " 个\n";
-        os << "标识符          类型                                        "
+        os << "标识符            类型                                      "
               "属性/访问 偏移/值\n";
 
         std::vector<const Symbol *> sortedSymbols;
@@ -335,9 +355,9 @@ void SymbolTable::Print(std::ostream &os) const
         std::sort(sortedSymbols.begin(),
                   sortedSymbols.end(),
                   [](const Symbol *a, const Symbol *b) {
-                      if ((a->attr & ~Symbol::ACCESSMASK) == Symbol::CONSTANT)
+                      if (a->Attr() == Symbol::CONSTANT)
                           return false;
-                      if ((b->attr & ~Symbol::ACCESSMASK) == Symbol::CONSTANT)
+                      if (b->Attr() == Symbol::CONSTANT)
                           return true;
                       return a->offset < b->offset;
                   });
@@ -345,9 +365,9 @@ void SymbolTable::Print(std::ostream &os) const
         for (auto symbolPtr : sortedSymbols) {
             const Symbol &sym = *symbolPtr;
 
-            os << setw(15) << sym.id << ' ' << setw(43) << sym.type.Name() << ' ';
+            os << setw(17) << sym.id << ' ' << setw(41) << sym.type.Name() << ' ';
 
-            switch (sym.attr & ~Symbol::ACCESSMASK) {
+            switch (sym.Attr()) {
             case Symbol::STATIC: os << "静态 "; break;
             case Symbol::VIRTUAL: os << "虚   "; break;
             case Symbol::PUREVIRTUAL: os << "纯虚 "; break;
@@ -355,7 +375,7 @@ void SymbolTable::Print(std::ostream &os) const
             default: os << "     "; break;
             }
 
-            switch (sym.attr & Symbol::ACCESSMASK) {
+            switch (sym.Access()) {
             case Symbol::PUBLIC: os << "PUB  "; break;
             case Symbol::PRIVATE: os << "PRI  "; break;
             case Symbol::PROTECTED: os << "PRO  "; break;
@@ -368,7 +388,7 @@ void SymbolTable::Print(std::ostream &os) const
                 break;
             }
 
-            if (sym.attr == Symbol::CONSTANT)
+            if (sym.Attr() == Symbol::CONSTANT)
                 // Enum constant
                 os << sym.intConstant;
             else

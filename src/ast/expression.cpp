@@ -207,6 +207,9 @@ void OperatorFunctionId::Print(std::ostream &os, Indent indent) const
         "ARROW",   "CALL",    "SUBSCRIPT"};
 
     os << indent << "运算符函数Id: " << OP_NAME[(int)overloadOp] << "\n";
+    
+    if (nameSpec)
+        nameSpec->Print(os, indent + 1);
 }
 
 }  // namespace ast

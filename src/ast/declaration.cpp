@@ -26,8 +26,7 @@ Combine(Ptr<DeclSpecifier> n1, Ptr<DeclSpecifier> n2, Ptr<DeclSpecifier> &out)
 SyntaxStatus
 Combine(Ptr<TypeSpecifier> n1, Ptr<TypeSpecifier> n2, Ptr<TypeSpecifier> &out)
 {
-    if (typeid(*n1) == typeid(SimpleTypeSpecifier)
-        && typeid(*n2) == typeid(SimpleTypeSpecifier)) {
+    if (Is<SimpleTypeSpecifier>(*n1) && Is<SimpleTypeSpecifier>(*n2)) {
         Ptr<SimpleTypeSpecifier> t1 {static_cast<SimpleTypeSpecifier *>(n1.release())};
         Ptr<SimpleTypeSpecifier> t2 {static_cast<SimpleTypeSpecifier *>(n2.release())};
         Ptr<SimpleTypeSpecifier> tout;
@@ -37,15 +36,13 @@ Combine(Ptr<TypeSpecifier> n1, Ptr<TypeSpecifier> n2, Ptr<TypeSpecifier> &out)
         if (ss)
             return ss;
     }
-    else if (typeid(*n1) == typeid(TypeSpecifier)
-             && typeid(*n2) == typeid(TypeSpecifier)) {
+    else if (Is<TypeSpecifier>(*n1) && Is<TypeSpecifier>(*n2)) {
         return "duplicate const specifier";
     }
-    else if (typeid(*n1) != typeid(TypeSpecifier)
-             && typeid(*n2) != typeid(TypeSpecifier)) {
+    else if (!Is<TypeSpecifier>(*n1) && !Is<TypeSpecifier>(*n2)) {
         return "more than one type are specified";
     }
-    else if (typeid(*n1) == typeid(TypeSpecifier)) {
+    else if (Is<TypeSpecifier>(*n1)) {
         n2->cv = n1->cv;
         out    = std::move(n2);
     }

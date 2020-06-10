@@ -81,20 +81,23 @@ bool ParseContext::AddName(std::string name, IdType type)
     lastAddedName = name;
     return true;
 }
-
+#include <iostream>
 ParseContext::IdType ParseContext::QueryName(std::string name) const
 {
-    if (localScope) {
-        auto it = localScope->nameMap.find(name);
-        if (it != localScope->nameMap.end())
-            return it->second;
-        return ID;
-    }
+    // Qualified destructor
+    if (localScope && localScope->name == name)
+        return CLASS;
 
-    for (Scope *scope = scopeStack.top().get(); scope; scope = scope->parentScope) {
+    Scope *scope = localScope ? localScope : scopeStack.top().get();
+
+    for (; scope; scope = scope->parentScope) {
         auto it = scope->nameMap.find(name);
-        if (it != scope->nameMap.end())
+        if (it != scope->nameMap.end()) {
             return it->second;
+        }
+
+        if (localScope)
+            break;
     }
 
     return ID;

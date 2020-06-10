@@ -180,8 +180,9 @@ std::string Type::Name(std::string innerName) const
             name = "(" + postfix + ")";
 
         name += "(";
-        for (std::size_t i = 0; i < Function()->paramList.size(); i++) {
-            if (i > 0)
+        std::size_t startIdx = Function()->IsNonStaticMember() ? 1 : 0;
+        for (std::size_t i = startIdx; i < Function()->paramList.size(); i++) {
+            if (i > startIdx)
                 name += ", ";
             name += Function()->paramList[i].symbol->type.Name();
         }
@@ -256,21 +257,21 @@ bool Type::IsConvertibleTo(const Type &target, Constant *constant) const
         return true;
 
     // 1. l-value to r-value
-    if (t.IsRef() && !t.RemoveRef().IsSimple(TypeClass::FUNCTION)
+    if (t.IsRef() && !target.IsRef() && !t.RemoveRef().IsSimple(TypeClass::FUNCTION)
         && !t.RemoveRef().IsArray()) {
         t = t.RemoveRef();
         // remove cv for non class type
         if (!t.IsSimple(TypeClass::CLASS))
             t.cv = CVQualifier::NONE;
     }
-    // 2. array to pointer
-    else if (t.IsArray() && target.IsPtr()) {
-        t = t.ElementType().AddPtrDesc(PtrDescriptor {PtrType::PTR});
+    // 2. array (reference) to pointer
+    else if (t.RemoveRef().IsArray() && target.IsPtr()) {
+        t = t.RemoveRef().ElementType().AddPtrDesc(PtrDescriptor {PtrType::PTR});
     }
     // 3. function (reference) to pointer / member pointer
     else if (t.RemoveRef().IsSimple(TypeClass::FUNCTION) && target.IsPtr()
              && target.RemovePtr().IsSimple(TypeClass::FUNCTION)) {
-        if (!t.Function()->isNonStaticMember)
+        if (!t.Function()->IsNonStaticMember())
             t = t.RemoveRef().AddPtrDesc(PtrDescriptor {PtrType::PTR});
     }
     // r-value to const l-value (creates temporary)
@@ -499,19 +500,18 @@ bool Type::IsComplete() const
     // 3. array with unknown size
 
     // Reference or pointer to some type
-    if (!ptrDescList.empty())
+    if (IsPtr() || IsRef())
         return true;
 
-    if (!arrayDescList.empty()) {
+    if (IsArray()) {
         auto &a = arrayDescList.back();
 
         // Array of unknown size is incomplete type
         if (a.size == 0)
             return false;
 
-        // Array to pointer to some type
-        if (!a.ptrDescList.empty())
-            return true;
+        // Array to some type
+        return ElementType().IsComplete();
     }
 
     switch (typeClass) {
@@ -540,7 +540,7 @@ bool Type::IsPtr() const
     return !ptrDescList.empty() && ptrDescList.back().ptrType == PtrType::PTR;
 }
 
-bool Type::IsMember() const
+bool Type::IsMemberPtr() const
 {
     return !ptrDescList.empty() && ptrDescList.back().ptrType == PtrType::CLASSPTR;
 }
@@ -589,13 +589,13 @@ Type Type::Decay() const
         if (!t.IsSimple(TypeClass::CLASS))
             t.cv = CVQualifier::NONE;
     }
-    // 2. array to pointer
-    else if (t.IsArray()) {
-        t = t.ElementType().AddPtrDesc(PtrDescriptor {PtrType::PTR});
+    // 2. array (reference) to pointer
+    else if (t.RemoveRef().IsArray()) {
+        t = t.RemoveRef().ElementType().AddPtrDesc(PtrDescriptor {PtrType::PTR});
     }
     // 3. function (reference) to pointer
     else if (t.RemoveRef().IsSimple(TypeClass::FUNCTION)) {
-        if (!t.Function()->isNonStaticMember)
+        if (!t.Function()->IsNonStaticMember())
             t = t.RemoveRef().AddPtrDesc(PtrDescriptor {PtrType::PTR});
     }
 
@@ -657,6 +657,23 @@ FunctionDescriptor::FunctionDescriptor(Type retType)
     , hasBody(false)
     , friendClass(nullptr)
 {}
+
+bool FunctionDescriptor::IsMember() const
+{
+    assert(defSymbol);
+    return defSymbol->IsMember();
+}
+
+bool FunctionDescriptor::IsNonStaticMember() const
+{
+    return IsMember() && defSymbol->Attr() != Symbol::STATIC;
+}
+
+CVQualifier FunctionDescriptor::MemberCV() const
+{
+    assert(defSymbol);
+    return defSymbol->type.cv;
+}
 
 bool FunctionDescriptor::HasSameSignatureWith(const FunctionDescriptor &func)
 {

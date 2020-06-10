@@ -64,14 +64,14 @@ void DeclSpecifier::Analysis(SemanticContext &context) const
     else
         context.type = {FundType::VOID};
 
+    auto &attr = context.decl.symbolAccessAttr;
     switch (declAttr) {
-    case STATIC: context.decl.symAttr = Symbol::STATIC; break;
-    case VIRTUAL: context.decl.symAttr = Symbol::VIRTUAL; break;
-    default: context.decl.symAttr = Symbol::NORMAL; break;
+    case STATIC: attr = Symbol::Attribute(attr | Symbol::STATIC); break;
+    case VIRTUAL: attr = Symbol::Attribute(attr | Symbol::VIRTUAL); break;
+    case FRIEND: context.decl.isFriend = true; break;
+    case TYPEDEF: context.decl.isTypedef = true; break;
+    default: break;
     }
-
-    context.decl.isFriend  = declAttr == FRIEND;
-    context.decl.isTypedef = declAttr == TYPEDEF;
 }
 
 void SimpleTypeSpecifier::Analysis(SemanticContext &context) const
@@ -84,13 +84,16 @@ void SimpleTypeSpecifier::Analysis(SemanticContext &context) const
 
 void ElaboratedTypeSpecifier::Analysis(SemanticContext &context) const
 {
-    SymbolTable *symtab    = context.symtab;
+    SymbolTable *symtab    = nullptr;
     bool         qualified = false;
 
     if (nameSpec) {
         nameSpec->Analysis(context);
-        symtab    = context.qualifiedScope;
+        std::swap(symtab, context.qualifiedScope);
         qualified = true;
+    }
+    else {
+        symtab = context.symtab;
     }
 
     switch (typeClass) {
@@ -199,10 +202,10 @@ void EnumSpecifier::Analysis(SemanticContext &context) const
                 throw SemanticError(context.type.Name()
                                         + " is not convertible to integral",
                                     srcLocation);
-            
+
             // TODO: check constant unique
             symbol.intConstant = context.expr.constant.intVal;
-            curConstant = symbol.intConstant + 1;
+            curConstant        = symbol.intConstant + 1;
         }
         else {
             symbol.intConstant = curConstant;

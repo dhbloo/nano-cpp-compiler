@@ -2,19 +2,23 @@
 #include "../core/semantic.h"
 
 #include <cassert>
+#include <list>
 
 namespace ast {
 
 void ClassSpecifier::Analysis(SemanticContext &context) const
 {
     std::shared_ptr<ClassDescriptor> classDesc;
-    SymbolTable *                    symtab    = context.symtab;
+    SymbolTable *                    symtab    = nullptr;
     bool                             qualified = false;
 
     if (nameSpec) {
         nameSpec->Analysis(context);
-        symtab    = context.qualifiedScope;
+        std::swap(symtab, context.qualifiedScope);
         qualified = true;
+    }
+    else {
+        symtab = context.symtab;
     }
 
     classDesc = symtab->QueryClass(identifier, qualified);
@@ -51,10 +55,30 @@ void ClassSpecifier::Analysis(SemanticContext &context) const
 
 void MemberList::Analysis(SemanticContext &context) const
 {
-    auto lastDecl = context.decl;
+    auto                       lastDecl = context.decl;
+    std::list<SemanticContext> secondPassContext;
+    context.secondPassContext = &secondPassContext;
 
     // Restore point
+    // First pass: member declarations
     for (const auto &m : members) {
+        try {
+            // Always follow last decl from upper scope
+            context.decl                 = {lastDecl.state};
+            context.decl.memberFirstPass = true;
+            m->Analysis(context);
+        }
+        catch (SemanticError error) {
+            context.errorStream << error;
+            context.errCnt++;
+        }
+    }
+
+    // Second pass: member function definitions
+    for (const auto &m : members) {
+        if (!Is<MemberFunction>(*m))
+            continue;
+
         try {
             // Always follow last decl from upper scope
             context.decl = {lastDecl.state};
@@ -64,30 +88,27 @@ void MemberList::Analysis(SemanticContext &context) const
             context.errorStream << error;
             context.errCnt++;
         }
+        secondPassContext.pop_front();
     }
 
-    context.decl = lastDecl;
+    context.decl              = lastDecl;
+    context.secondPassContext = nullptr;
 }
 
 void MemberDeclaration::Analysis(SemanticContext &context) const
 {
-    assert(context.symbolSet);
-    auto &attr = context.symbolSet->attr;
-
     if (context.decl.isFriend)
         return;
 
     switch (access) {
-    case Access::PRIVATE: attr = Symbol::Attribute(attr | Symbol::PRIVATE); break;
-    case Access::PROTECTED: attr = Symbol::Attribute(attr | Symbol::PROTECTED); break;
-    default: attr = Symbol::Attribute(attr | Symbol::PUBLIC); break;
+    case Access::PRIVATE: context.decl.symbolAccessAttr = Symbol::PRIVATE; break;
+    case Access::PROTECTED: context.decl.symbolAccessAttr = Symbol::PROTECTED; break;
+    default: context.decl.symbolAccessAttr = Symbol::PUBLIC; break;
     }
 }
 
 void MemberDefinition::Analysis(SemanticContext &context) const
 {
-    auto lastDecl = context.decl;
-
     if (declSpec)
         declSpec->Analysis(context);
     else
@@ -98,18 +119,18 @@ void MemberDefinition::Analysis(SemanticContext &context) const
                                 + context.symtab->ScopeName() + "'",
                             srcLocation);
 
+    if (!context.decl.isTypedef)
+        MemberDeclaration::Analysis(context);
+
     Type decayType = context.type;
     auto savedDecl = context.decl;
 
     for (const auto &d : decls) {
         d->Analysis(context);
-        MemberDeclaration::Analysis(context);
 
         context.type = decayType;
         context.decl = savedDecl;
     }
-
-    context.decl = lastDecl;
 }
 
 void MemberDeclarator::Analysis(SemanticContext &context) const
@@ -117,14 +138,14 @@ void MemberDeclarator::Analysis(SemanticContext &context) const
     decl->Analysis(context);
 
     if (isPure) {
-        if (context.symbolSet->attr == Symbol::VIRTUAL)
-            context.symbolSet->attr = Symbol::PUREVIRTUAL;
+        if (context.symbolSet->Attr() == Symbol::VIRTUAL)
+            context.symbolSet->SetAttr(Symbol::PUREVIRTUAL);
         else
             throw SemanticError("only virtual function can be declared pure",
                                 srcLocation);
     }
     else if (constInit) {
-        if ((context.symbolSet->attr & ~Symbol::ACCESSMASK) != Symbol::STATIC)
+        if (context.symbolSet->Attr() != Symbol::STATIC)
             throw SemanticError("in-class initialization of data member must be static",
                                 srcLocation);
 
@@ -150,8 +171,8 @@ void MemberDeclarator::Analysis(SemanticContext &context) const
 
 void MemberFunction::Analysis(SemanticContext &context) const
 {
-    func->Analysis(context);
     MemberDeclaration::Analysis(context);
+    func->Analysis(context);
 }
 
 void BaseSpecifier::Analysis(SemanticContext &context) const
@@ -159,12 +180,15 @@ void BaseSpecifier::Analysis(SemanticContext &context) const
     auto classDesc = context.symtab->GetCurrentClass();
     assert(classDesc);
 
-    SymbolTable *symtab    = context.symtab;
+    SymbolTable *symtab    = nullptr;
     bool         qualified = false;
     if (nameSpec) {
         nameSpec->Analysis(context);
-        symtab    = context.qualifiedScope;
+        std::swap(symtab, context.qualifiedScope);
         qualified = true;
+    }
+    else {
+        symtab = context.symtab;
     }
 
     // Query base class definition
@@ -181,12 +205,15 @@ void BaseSpecifier::Analysis(SemanticContext &context) const
 void CtorMemberInitializer::Analysis(SemanticContext &context) const
 {
     if (isBaseCtor) {
-        SymbolTable *symtab    = context.symtab;
+        SymbolTable *symtab    = nullptr;
         bool         qualified = false;
         if (nameSpec) {
             nameSpec->Analysis(context);
-            symtab    = context.qualifiedScope;
+            std::swap(symtab, context.qualifiedScope);
             qualified = true;
+        }
+        else {
+            symtab = context.symtab;
         }
 
         auto baseClassDesc = symtab->QueryClass(identifier, qualified);
@@ -213,13 +240,17 @@ void CtorMemberInitializer::Analysis(SemanticContext &context) const
                                 srcLocation);
 
         // TODO: Get constructor symbol set
+        context.symbolSet = {};  // !!
+        context.type      = {FundType::VOID};
     }
     else {
-        // Get member symbol
-        context.symbolSet = context.symtab->QuerySymbol(identifier);
+        // Get member symbol in class scope (current is function scope)
+        context.symbolSet = context.symtab->GetParent()->QuerySymbol(identifier);
         if (!context.symbolSet)
             throw SemanticError("use of undeclared identifier '" + identifier + "'",
                                 srcLocation);
+
+        context.type = context.symbolSet->type;
     }
 
     exprList->Analysis(context);
@@ -229,15 +260,15 @@ void ConversionFunctionId::Analysis(SemanticContext &context) const
 {
     Type funcType = context.type;
 
+    if (!funcType.IsSimple(TypeClass::FUNCTION))
+        throw SemanticError("function definition does not a function", srcLocation);
+
     typeSpec->Analysis(context);
 
     if (ptrSpec) {
         ptrSpec->Analysis(context);
         context.type.ptrDescList = std::move(context.ptrDescList);
     }
-
-    // TODO: conversion id is not function exception
-    assert(funcType.typeClass == TypeClass::FUNCTION);
 
     // Set function return type to conversion type
     funcType.Function()->retType = context.type;

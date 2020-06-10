@@ -7,6 +7,7 @@
 #include <cstdint>
 #include <memory>
 #include <ostream>
+#include <typeinfo>
 #include <vector>
 
 struct SemanticContext;
@@ -125,6 +126,12 @@ template <typename T, typename... Args>
 inline Ptr<T> MkNode(Args &&... args)
 {
     return std::move(std::unique_ptr<T> {new T {std::forward<Args>(args)...}});
+}
+
+template <typename T, typename V>
+inline bool Is(V &&v)
+{
+    return typeid(v) == typeid(T);
 }
 
 }  // namespace ast

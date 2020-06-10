@@ -22,7 +22,8 @@ void PtrSpecifier::Analysis(SemanticContext &context) const
 
         if (p.ptrType == PtrType::CLASSPTR) {
             p.classNameSpec->Analysis(context);
-            classDesc = context.qualifiedScope->GetCurrentClass();
+            classDesc              = context.qualifiedScope->GetCurrentClass();
+            context.qualifiedScope = nullptr;
             assert(classDesc);
             assert(classDesc->memberTable);
         }
@@ -155,11 +156,27 @@ void IdDeclarator::Analysis(SemanticContext &context) const
 
     id->Analysis(context);
 
-    if (context.decl.isTypedef)
+    if (context.decl.isTypedef || context.symbolSet)
         return;
 
+    // Non static member function has a hidden parameter "this"
+    if (context.type.IsSimple(TypeClass::FUNCTION) && context.newSymbol.IsMember()
+        && context.newSymbol.Attr() != Symbol::STATIC) {
+        auto funcDesc = context.type.Function();
+        auto classDesc =
+            context.symtab->QueryClass(context.symtab->GetCurrentClass()->className);
+        assert(classDesc);
+
+        Type thisType {classDesc};
+        thisType.cv = context.type.cv;
+        thisType.AddPtrDesc(Type::PtrDescriptor {PtrType::PTR, CVQualifier::CONST});
+
+        SymbolSet thisSymbol = funcDesc->funcScope->AddSymbol(Symbol {"", thisType});
+        funcDesc->paramList.insert(funcDesc->paramList.begin(), {(Symbol *)thisSymbol});
+    }
+
     // Record original symbol's attribute
-    auto originAttr = Symbol::Attribute(context.newSymbol.attr & ~Symbol::ACCESSMASK);
+    auto originAttr = context.newSymbol.Attr();
 
     context.symbolSet = insymtab->AddSymbol(context.newSymbol);
     if (!context.symbolSet) {
@@ -173,15 +190,15 @@ void IdDeclarator::Analysis(SemanticContext &context) const
 
         // Check if function symbol's attribute changed, which means
         // overrided function from base class using a different attribute
-        auto curAttr = Symbol::Attribute(context.symbolSet->attr & ~Symbol::ACCESSMASK);
-        if (originAttr && curAttr != originAttr)
+        if (originAttr != Symbol::NORMAL && context.symbolSet->Attr() != originAttr)
             throw SemanticError("function '" + context.newSymbol.id
                                     + "' overrides a virtual function in base class",
                                 srcLocation);
 
-        if (curAttr != Symbol::STATIC && !context.decl.isFriend
-            && insymtab->GetCurrentClass())
-            context.symbolSet->type.Function()->isNonStaticMember = true;
+        // Set definition symbol in the function descriptor
+        // Each function descriptor links to (exactly) one symbol in a symbol table
+        auto funcDesc       = context.type.Function();
+        funcDesc->defSymbol = context.symbolSet;
     }
 }
 
@@ -233,30 +250,43 @@ void ParameterDeclaration::Analysis(SemanticContext &context) const
 
 void FunctionDefinition::Analysis(SemanticContext &context) const
 {
-    if (declSpec)
-        declSpec->Analysis(context);
-    else {
-        // constructor/destructor/conversion type
-        context.type = {FundType::VOID};
+    if (context.decl.memberFirstPass || !context.secondPassContext) {
+        if (declSpec)
+            declSpec->Analysis(context);
+        else {
+            // constructor/destructor/conversion type
+            context.type = {FundType::VOID};
+        }
+
+        // Do not allow incomplete type in parameter declaration
+        context.decl.mustComplete = true;
+        declarator->Analysis(context);
+
+        if (!context.type.IsSimple(TypeClass::FUNCTION))
+            throw SemanticError("function definition does not a function", srcLocation);
+
+        // Get function descriptor
+        if (context.type.Function()->hasBody)
+            throw SemanticError("redefinition of function '" + context.symbolSet->id
+                                    + "'",
+                                srcLocation);
+
+        // On first pass of member function definition, do not enter its function body
+        if (context.decl.memberFirstPass) {
+            context.secondPassContext->push_back(context);
+            return;
+        }
     }
 
-    // Do not allow incomplete type in parameter declaration
-    context.decl.mustComplete = true;
-    declarator->Analysis(context);
-
-    // TODO: function decl not function type exception
-    assert(context.type.typeClass == TypeClass::FUNCTION);
-
-    // Get function descriptor
-    auto funcDesc = context.type.Function();
-    if (funcDesc->hasBody)
-        throw SemanticError("redefinition of function '" + context.symbolSet->id + "'",
-                            srcLocation);
+    SemanticContext *contextPtr = &context;
+    if (context.secondPassContext)
+        contextPtr = &context.secondPassContext->front();
 
     // Enter function scope
-    SemanticContext newContext(context);
-    newContext.decl.state = DeclState::NODECL;
-    newContext.symtab     = funcDesc->funcScope.get();
+    SemanticContext newContext(*contextPtr);
+    auto            funcDesc = newContext.type.Function();
+    newContext.decl.state    = DeclState::NODECL;
+    newContext.symtab        = funcDesc->funcScope.get();
 
     for (const auto &i : ctorInitList) {
         i->Analysis(newContext);
@@ -267,8 +297,8 @@ void FunctionDefinition::Analysis(SemanticContext &context) const
 
     // Leave function scope
     funcDesc->hasBody = true;
-    if (context.printAllSymtab)
-        funcDesc->funcScope->Print(context.outputStream);
+    if (newContext.printAllSymtab)
+        funcDesc->funcScope->Print(newContext.outputStream);
 }
 
 void AssignmentInitializer::Analysis(SemanticContext &context) const

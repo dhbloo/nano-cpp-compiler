@@ -22,8 +22,7 @@ void TranslationUnit::Analysis(SemanticContext &context) const
 
 void NameSpecifier::Analysis(SemanticContext &context) const
 {
-    SymbolTable *&symtab = context.qualifiedScope;
-    symtab               = context.symtab;
+    SymbolTable *symtab = context.symtab;
 
     if (isGlobal)
         symtab = symtab->GetRoot();
@@ -42,6 +41,8 @@ void NameSpecifier::Analysis(SemanticContext &context) const
                                     + "' named in nested name specifier",
                                 srcLocation);
     }
+
+    context.qualifiedScope = symtab;
 }
 
 }  // namespace ast

@@ -89,7 +89,7 @@ struct Type
     // Returns if the type is a pointer or member pointer (T*, T C::*)
     bool IsPtr() const;
     // Returns if the type is a class member pointer
-    bool IsMember() const;
+    bool IsMemberPtr() const;
     // Returns if the type is an array (T[])
     bool IsArray() const;
     // Returns array size if the type is an array, otherwise returns 0
@@ -139,13 +139,20 @@ struct FunctionDescriptor : TypeDescriptor
 
     Type             retType;
     bool             hasBody;
-    bool             isNonStaticMember;
+    Symbol *         defSymbol;
     ClassDescriptor *friendClass;
 
     std::vector<Param>           paramList;
     std::shared_ptr<SymbolTable> funcScope;
 
     FunctionDescriptor(Type retType);
+    // Returns true if the function is defined as a class member
+    bool IsMember() const;
+    // Returns true if the function is defined as a non-static class member
+    bool IsNonStaticMember() const;
+    // Returns the cv qualifier of a member function, if the function is not
+    // a member, always returns CVQualifier::NONE
+    CVQualifier MemberCV() const;
     // Returns true if both parameter lists are the same
     bool HasSameSignatureWith(const FunctionDescriptor &func);
     // Returns true if both signatures and return types are the same

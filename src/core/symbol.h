@@ -23,7 +23,7 @@ struct Symbol
 
     std::string id;
     Type        type;
-    Attribute   attr;
+    Attribute   accessAttr;
 
     union {
         // constant value
@@ -32,18 +32,26 @@ struct Symbol
         // non constant symbol offset
         int offset;  // in bytes
     };
+
+    Attribute Attr() const;
+    Attribute Access() const;
+    bool      IsMember() const;
+    void      SetAttr(Attribute attr);
 };
 
 class SymbolSet : public std::vector<Symbol *>
 {
+    SymbolTable *symbolScope = nullptr;
+
 public:
     using It = std::unordered_multimap<std::string, Symbol>::iterator;
 
     SymbolSet() = default;
-    SymbolSet(Symbol *symbol);
-    SymbolSet(std::pair<It, It> symbolRange);
-    Symbol *operator->() const;
-            operator Symbol *() const;
+    SymbolSet(Symbol *symbol, SymbolTable *scope);
+    SymbolSet(std::pair<It, It> symbolRange, SymbolTable *scope);
+    SymbolTable *Scope() const;
+    Symbol *     operator->() const;
+                 operator Symbol *() const;
 };
 
 class SymbolTable
@@ -62,10 +70,10 @@ public:
     // with same name and same signture already exists, returns pointer to that
     // symbol; if a symbol of other type exists, returns null; otherwise returns
     // pointer to the inserted symbol.
-    Symbol *AddSymbol(Symbol symbol);
-    bool    AddClass(std::shared_ptr<ClassDescriptor> classDesc);
-    bool    AddEnum(std::shared_ptr<EnumDescriptor> enumDesc);
-    bool    AddTypedef(std::string aliasName, Type type);
+    SymbolSet AddSymbol(Symbol symbol);
+    bool      AddClass(std::shared_ptr<ClassDescriptor> classDesc);
+    bool      AddEnum(std::shared_ptr<EnumDescriptor> enumDesc);
+    bool      AddTypedef(std::string aliasName, Type type);
 
     SymbolSet                        QuerySymbol(std::string id, bool qualified = false);
     std::shared_ptr<ClassDescriptor> QueryClass(std::string id, bool qualified = false);

@@ -3,6 +3,7 @@
 #include "../parser/yylocation.h"
 #include "symbol.h"
 
+#include <list>
 #include <ostream>
 
 enum class DeclState : std::uint8_t {
@@ -36,11 +37,11 @@ struct SemanticContext
     Symbol                           newSymbol;
     SymbolTable *                    qualifiedScope;
     std::vector<Type::PtrDescriptor> ptrDescList;
+    std::list<SemanticContext> *     secondPassContext;
 
     struct
     {
         bool     isConstant;
-        bool     qualified;
         Constant constant;
     } expr;
 
@@ -58,7 +59,8 @@ struct SemanticContext
         bool              isFriend;
         bool              isTypedef;
         bool              mustComplete;
-        Symbol::Attribute symAttr;
+        int8_t            memberFirstPass;
+        Symbol::Attribute symbolAccessAttr;
     } decl;
 };
 

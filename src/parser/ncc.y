@@ -1338,13 +1338,13 @@ function_definition:
             $$->declarator = $1;
             $$->funcBody = $2;
 
-            if (typeid(*$$->declarator.get()) != typeid(FunctionDeclarator)) {
+            
+            if (!Is<FunctionDeclarator>(*$$->declarator)) {
                 bool isFunc = false;
-                if (typeid(*$$->declarator.get()) == typeid(IdDeclarator)) {
+                if (Is<IdDeclarator>(*$$->declarator)) {
                     auto idDecl = static_cast<IdDeclarator*>($$->declarator.get());
 
-                    if (idDecl->innerDecl 
-                        && typeid(*idDecl->innerDecl) == typeid(FunctionDeclarator))
+                    if (idDecl->innerDecl && Is<FunctionDeclarator>(*idDecl->innerDecl))
                         isFunc = true;
                 }
 
@@ -1356,12 +1356,13 @@ function_definition:
         {
             /* constructor forward defi hack */
             auto decl = $1;
-            if (typeid(*decl->typeSpec) != typeid(ElaboratedTypeSpecifier))
+            if (!Is<ElaboratedTypeSpecifier>(*decl->typeSpec))
                 throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
 
             auto edecl = static_cast<ElaboratedTypeSpecifier*>(decl->typeSpec.get());
             if (edecl->typeClass != ElaboratedTypeSpecifier::CLASSNAME
-                || edecl->typeName != pc.CurLocalScopeName())
+                || (edecl->typeName != pc.CurLocalScopeName() 
+                    && (!edecl->nameSpec || edecl->nameSpec->path.back() != edecl->typeName)))
                 throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
 
             auto e = MkNode<FunctionDeclarator>(); e->srcLocation = @$;
@@ -1370,6 +1371,7 @@ function_definition:
             auto i = MkNode<IdDeclarator>(); i->srcLocation = @$;
             i->id = MkNode<IdExpression>(); i->id->srcLocation = @$;
             i->id->identifier = edecl->typeName;
+            i->id->nameSpec = std::move(edecl->nameSpec);
             i->id->stype = IdExpression::CONSTRUCTOR;
             i->Append(std::move(e));
 
@@ -1385,13 +1387,12 @@ function_definition:
             $$->declarator = $2;
             $$->funcBody = $3;
 
-            if (typeid(*$$->declarator.get()) != typeid(FunctionDeclarator)) {
+            if (!Is<FunctionDeclarator>(*$$->declarator)) {
                 bool isFunc = false;
-                if (typeid(*$$->declarator.get()) == typeid(IdDeclarator)) {
+                if (Is<IdDeclarator>(*$$->declarator)) {
                     auto idDecl = static_cast<IdDeclarator*>($$->declarator.get());
 
-                    if (idDecl->innerDecl 
-                        && typeid(*idDecl->innerDecl) == typeid(FunctionDeclarator))
+                    if (idDecl->innerDecl && Is<FunctionDeclarator>(*idDecl->innerDecl))
                         isFunc = true;
                 }
 
@@ -1546,7 +1547,7 @@ member_declaration:
         {
             /* constructor forward decl hack */
             auto decl = $1;
-            if (typeid(*decl->typeSpec) != typeid(ElaboratedTypeSpecifier))
+            if (!Is<ElaboratedTypeSpecifier>(*decl->typeSpec))
                 throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
 
             auto edecl = static_cast<ElaboratedTypeSpecifier*>(decl->typeSpec.get());
@@ -1617,7 +1618,7 @@ member_declarator:
             $$->constInit = $2;
 
             if ($$->decl->IsFunctionDecl()) {
-                if (typeid(*$$->constInit) == typeid(IntLiteral) &&
+                if (Is<IntLiteral>(*$$->constInit) &&
                     static_cast<IntLiteral*>($$->constInit.get())->value == 0) {
                         $$->constInit = nullptr;
                         $$->isPure = true;

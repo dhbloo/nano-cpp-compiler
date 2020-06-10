@@ -99,8 +99,7 @@ void BinaryExpression::Analysis(SemanticContext &context) const
                                     + "' is not a class or struct",
                                 srcLocation);
 
-        rightContext.symtab         = context.type.Class()->memberTable.get();
-        rightContext.expr.qualified = true;
+        rightContext.qualifiedScope = context.type.Class()->memberTable.get();
         break;
 
     case BinaryOp::ARROW:
@@ -122,8 +121,7 @@ void BinaryExpression::Analysis(SemanticContext &context) const
                                     + "' is not a class or struct",
                                 srcLocation);
 
-        rightContext.symtab         = context.type.Class()->memberTable.get();
-        rightContext.expr.qualified = true;
+        rightContext.qualifiedScope = context.type.Class()->memberTable.get();
         break;
 
     default: break;
@@ -229,14 +227,23 @@ void UnaryExpression::Analysis(SemanticContext &context) const
 
             context.type = context.type.RemoveRef();
 
-            // if (context.type.RemoveRef().Function()->isNonStaticMember)
+            // if (context.type.RemoveRef().Function()->IsNonStaticMember())
             //     // member function to member function pointer
             //     context.type.AddPtrDesc(Type::PtrDescriptor {
             //         PtrType::CLASSPTR,
             //         CVQualifier::NONE,
             //         context.type.Function()->funcScope->GetCurrentClass()});
             // else
-            context.type.AddPtrDesc(Type::PtrDescriptor {PtrType::PTR});
+            assert(context.symbolSet);
+            if (context.symbolSet.Scope()->GetCurrentClass()) {
+                context.type.AddPtrDesc(
+                    Type::PtrDescriptor {PtrType::CLASSPTR,
+                                         CVQualifier::NONE,
+                                         context.symbolSet.Scope()->GetCurrentClass()});
+                context.qualifiedScope = nullptr;
+            }
+            else
+                context.type.AddPtrDesc(Type::PtrDescriptor {PtrType::PTR});
         }
 
         break;
@@ -319,6 +326,8 @@ void SizeofExpression::Analysis(SemanticContext &context) const
 
 void PlainNew::Analysis(SemanticContext &context) const
 {
+    throw SemanticError("unimplemented", srcLocation);
+
     if (placement)
         placement->Analysis(context);
 
@@ -327,6 +336,8 @@ void PlainNew::Analysis(SemanticContext &context) const
 
 void InitializableNew::Analysis(SemanticContext &context) const
 {
+    throw SemanticError("unimplemented", srcLocation);
+
     if (placement)
         placement->Analysis(context);
 
@@ -347,6 +358,8 @@ void InitializableNew::Analysis(SemanticContext &context) const
 
 void DeleteExpression::Analysis(SemanticContext &context) const
 {
+    throw SemanticError("unimplemented", srcLocation);
+
     expr->Analysis(context);
     // TODO: type check
 
@@ -355,16 +368,23 @@ void DeleteExpression::Analysis(SemanticContext &context) const
 
 void IdExpression::Analysis(SemanticContext &context) const
 {
-    SymbolTable *symtab    = context.symtab;
-    bool         qualified = context.expr.qualified;
+    SymbolTable *symtab    = nullptr;
+    bool         qualified = false;
+
+    if (context.qualifiedScope) {
+        std::swap(symtab, context.qualifiedScope);
+        qualified = true;
+    }
+    else {
+        symtab = context.symtab;
+    }
 
     if (nameSpec) {
-        /*if (context.decl.state != DeclState::NODECL)
-            throw SemanticError("declaration of '" + identifier + "' outside its scope",
-                                srcLocation);*/
+        SemanticContext nameContext(context);
+        nameContext.symtab = symtab;
 
-        nameSpec->Analysis(context);
-        symtab    = context.qualifiedScope;
+        nameSpec->Analysis(nameContext);
+        symtab    = nameContext.qualifiedScope;
         qualified = true;
     }
 
@@ -382,10 +402,20 @@ void IdExpression::Analysis(SemanticContext &context) const
     }
 
     if (context.decl.state != DeclState::NODECL) {
-        // Record new symbol
-        context.newSymbol = {composedId, context.type, context.decl.symAttr};
-        // maybe unused (id declarator already sets symbolSet)
-        context.symbolSet = &context.newSymbol;
+        if (qualified) {
+            context.symbolSet = symtab->QuerySymbol(composedId, qualified);
+            if (!context.symbolSet)
+                throw SemanticError("no member named '" + composedId + "' in '"
+                                        + symtab->ScopeName() + "'",
+                                    srcLocation);
+            context.type = context.symbolSet->type;
+        }
+        else {
+            // Record new symbol
+            context.newSymbol = {composedId, context.type, context.decl.symbolAccessAttr};
+            // maybe unused (id declarator already sets symbolSet)
+            context.symbolSet = {};
+        }
     }
     else {
         context.symbolSet = symtab->QuerySymbol(composedId, qualified);
@@ -396,7 +426,7 @@ void IdExpression::Analysis(SemanticContext &context) const
                 context.newSymbol = {composedId, context.type};
                 break;
             case CONSTRUCTOR:
-                // TODO: gen default constructor
+                // TODO: gen default constructor?
                 context.newSymbol = {composedId, context.type};
                 break;
             default:
@@ -410,17 +440,17 @@ void IdExpression::Analysis(SemanticContext &context) const
                                         srcLocation);
                 break;
             }
-            context.symbolSet = &context.newSymbol;
+            assert(false);
+            context.symbolSet = {&context.newSymbol, symtab};
         }
 
-        context.type = context.symbolSet->type;
-        context.expr.isConstant =
-            (context.symbolSet->attr & ~Symbol::ACCESSMASK) == Symbol::CONSTANT;
+        // IdExpression's type is always the first symbol's type (if multiple symbols)
+        context.type                 = context.symbolSet->type;
+        context.expr.isConstant      = context.symbolSet->Attr() == Symbol::CONSTANT;
         context.expr.constant.intVal = context.symbolSet->intConstant;
 
-        // Id expression is always a l-value (function, array is l-value already)
-        if (!context.type.IsRef() && !context.type.IsSimple(TypeClass::FUNCTION)
-            && !context.type.IsArray())
+        // Id expression is always a l-value (function is l-value already)
+        if (!context.type.IsRef() && !context.type.IsSimple(TypeClass::FUNCTION))
             context.type.AddPtrDesc(Type::PtrDescriptor {PtrType::REF});
     }
 }
@@ -436,7 +466,17 @@ std::string IdExpression::ComposedId(SemanticContext &context) const
 
 void ThisExpression::Analysis(SemanticContext &context) const
 {
-    // TODO: symbol for this class object
+    auto funcDesc = context.symtab->GetCurrentFunction();
+    assert(funcDesc);
+
+    if (!funcDesc->IsNonStaticMember())
+        throw SemanticError(
+            "invalid use of 'this' outside of a non-static member function",
+            srcLocation);
+
+    context.symbolSet = {funcDesc->paramList.front().symbol, funcDesc->funcScope.get()};
+    context.type      = context.symbolSet->type;
+    context.expr.isConstant = false;
 }
 
 void IntLiteral::Analysis(SemanticContext &context) const
@@ -484,13 +524,9 @@ void ExpressionList::Analysis(SemanticContext &context) const
 
     if (context.symbolSet.size() == 1) {
         // TODO: class, fundtype, enum: para init
-        switch (context.type.typeClass) {
-        case TypeClass::FUNDTYPE: break;
-        case TypeClass::ENUM: break;
-        case TypeClass::CLASS:
-            // TODO: operator() or constructor
-            break;
-        default:
+        // TODO: operator() or constructor
+
+        if (context.type.IsSimple(TypeClass::FUNCTION)) {
             auto funcDesc = context.type.Function();
 
             // TODO: default parameter match
@@ -511,9 +547,23 @@ void ExpressionList::Analysis(SemanticContext &context) const
 
             context.type = funcDesc->retType;
         }
+        else {
+            if (exprList.size() != 1)
+                throw SemanticError("excess elements in scalar initializer", srcLocation);
+
+            Type varType = context.type;
+            exprList.front()->Analysis(context);
+
+            Constant *c = context.expr.isConstant ? &context.expr.constant : nullptr;
+            if (!context.type.IsConvertibleTo(varType, c))
+                throw SemanticError("cannot initialize '" + varType.Name() + "' with '"
+                                        + context.type.Name() + "'",
+                                    srcLocation);
+        }
     }
     else {
         // TODO: overload function resolution
+        throw SemanticError("function overloading unimplemented", srcLocation);
     }
 }
 

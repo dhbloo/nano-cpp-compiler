@@ -186,13 +186,13 @@ void JumpStatement::Analysis(SemanticContext &context) const
     default:
         Type &retType = context.symtab->GetCurrentFunction()->retType;
         if (retExpr) {
-            if (retType.typeClass == TypeClass::FUNDTYPE
+            if (retType.IsSimple(TypeClass::FUNDTYPE)
                 && retType.fundType == FundType::VOID)
                 throw SemanticError("void function should not return a value",
                                     srcLocation);
 
             retExpr->Analysis(context);
-            
+
             if (!context.type.IsConvertibleTo(retType))
                 throw SemanticError("connot convert type '" + context.type.Name()
                                         + "' to function return type '" + retType.Name()
@@ -200,7 +200,7 @@ void JumpStatement::Analysis(SemanticContext &context) const
                                     srcLocation);
         }
         else {
-            if (retType.typeClass != TypeClass::FUNDTYPE
+            if (!retType.IsSimple(TypeClass::FUNDTYPE)
                 || retType.fundType != FundType::VOID)
                 throw SemanticError("non-void function should return a value",
                                     srcLocation);

@@ -58,7 +58,7 @@ bool Declarator::IsTypeConversionDecl() const
 
 bool IdDeclarator::IsTypeConversionDecl() const
 {
-    return typeid(*id) == typeid(ConversionFunctionId);
+    return Is<ConversionFunctionId>(*id);
 }
 
 void PtrSpecifier::Print(std::ostream &os, Indent indent) const
