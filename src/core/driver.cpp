@@ -1,18 +1,16 @@
 #include "driver.h"
 
+#include "../codegen/context.h"
 #include "../parser/yyparser.h"
-#include "semantic.h"
 
-Driver::Driver(std::ostream &errorStream)
-    : errorStream(errorStream)
-    , globalSymtab(nullptr)
-{}
+Driver::Driver(std::ostream &errorStream) : errorStream(errorStream) {}
 
-bool Driver::Parse(bool isDebugMode)
+bool Driver::Parse(bool isDebugMode, bool printLocalTable)
 {
-    ast.reset();
-    globalSymtab.ClearAll();
-    stringTable.clear();
+    ast          = {};
+    globalSymtab = {};
+    llvmContext  = {};
+    module       = {};
 
     /* Parser analysis */
 
@@ -27,15 +25,24 @@ bool Driver::Parse(bool isDebugMode)
         return false;
     }
 
-    /* Semantic analysis */
+    /* Semantic analysis & Code generation */
 
-    SemanticContext context {errorStream,
-                             std::cout,
-                             errCnt,
-                             isDebugMode,
-                             stringTable,
-                             &globalSymtab};
-    ast->Analysis(context);
+    globalSymtab = std::make_unique<SymbolTable>(nullptr);
+    llvmContext  = std::make_unique<llvm::LLVMContext>();
+    module       = std::make_unique<llvm::Module>("NCC Module", *llvmContext);
+    llvm::IRBuilder<> IRBuilder(*llvmContext);
+    CodeGenHelper     cgHelper(*llvmContext, *module);
+
+    CodegenContext context {errorStream,
+                            std::cout,
+                            errCnt,
+                            printLocalTable,
+                            *llvmContext,
+                            *module,
+                            &IRBuilder,
+                            cgHelper,
+                            globalSymtab.get()};
+    ast->Codegen(context);
 
     if (errCnt > 0) {
         errorStream << "semantic check failed, " << errCnt << " error generated!\n";
@@ -47,5 +54,11 @@ bool Driver::Parse(bool isDebugMode)
 
 void Driver::PrintSymbolTable(std::ostream &os) const
 {
-    globalSymtab.Print(os);
+    if (globalSymtab)
+        globalSymtab->Print(os);
+}
+
+void Driver::PrintIR() const
+{
+    module->print(llvm::outs(), nullptr);
 }

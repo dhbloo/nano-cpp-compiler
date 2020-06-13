@@ -147,9 +147,15 @@ void IdExpression::Print(std::ostream &os, Indent indent) const
     os << indent << "Id表达式: " << identifier;
 
     switch (stype) {
-    case DESTRUCTOR: os << " (析构函数)\n"; break;
-    case CONSTRUCTOR: os << " (构造函数)\n"; break;
-    default: os << '\n'; break;
+    case DESTRUCTOR:
+        os << " (析构函数)\n";
+        break;
+    case CONSTRUCTOR:
+        os << " (构造函数)\n";
+        break;
+    default:
+        os << '\n';
+        break;
     }
 
     if (nameSpec)
@@ -207,7 +213,7 @@ void OperatorFunctionId::Print(std::ostream &os, Indent indent) const
         "ARROW",   "CALL",    "SUBSCRIPT"};
 
     os << indent << "运算符函数Id: " << OP_NAME[(int)overloadOp] << "\n";
-    
+
     if (nameSpec)
         nameSpec->Print(os, indent + 1);
 }

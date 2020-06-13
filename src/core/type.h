@@ -37,7 +37,7 @@ struct Type
     };
 
     // Type catagory
-    TypeClass typeClass;
+    TypeKind typeKind;
 
     // for FUNDTYPE, CLASS, ENUM, FUNCTION
     CVQualifier                  cv;
@@ -70,8 +70,8 @@ struct Type
     std::string Name(std::string innerName = "") const;
     // Returns sizeof(type) in bytes
     int Size() const;
-    // Returns alignment requirements in bytes (0, 1, 2, 4, 8)
-    int AlignmentSize() const;
+    // Returns alignment requirements in bytes (1, 2, 4, 8)
+    int Alignment() const;
     // Returns if the type can be implicitly converted to target type
     // If true and there is a constant conversion, convert the given
     // constant (if not null)
@@ -83,7 +83,7 @@ struct Type
     bool IsComplete() const;
     // Returns if the type is not reference, pointer or array, and it
     // belongs to type class
-    bool IsSimple(TypeClass typeClass) const;
+    bool IsSimple(TypeKind typeKind) const;
     // Returns if the type is a reference (T&)
     bool IsRef() const;
     // Returns if the type is a pointer or member pointer (T*, T C::*)
@@ -94,6 +94,9 @@ struct Type
     bool IsArray() const;
     // Returns array size if the type is an array, otherwise returns 0
     size_t ArraySize() const;
+    // Returns if the type is a constant and must be explicit initialized.
+    // Eg. ref, const ptr, const element array, const variable
+    bool IsConstInit() const;
 
     /* Type modifiers */
 
@@ -120,7 +123,8 @@ struct ClassDescriptor : TypeDescriptor
     std::vector<ClassDescriptor *> friendClassTo;
     std::shared_ptr<SymbolTable>   memberTable;
 
-    bool IsBaseOf(const ClassDescriptor &classDesc) const;
+    std::string FullName() const;
+    bool        IsBaseOf(const ClassDescriptor &classDesc) const;
 };
 
 struct EnumDescriptor : TypeDescriptor

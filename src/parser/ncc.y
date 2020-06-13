@@ -870,7 +870,7 @@ selection_statement:
             e->falseStmt = $6;
             $$ = std::move(e);
         }
-|   SWITCH '(' condition ')' statement
+|   SWITCH '(' condition ')' compound_statement
         {
             auto e = MkNode<SwitchStatement>(); e->srcLocation = @$;
             e->condition = $3;
@@ -1065,19 +1065,19 @@ type_name:
     class_name
         { 
             $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
-            $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
+            $$->typeKind = ElaboratedTypeSpecifier::CLASSNAME;
             $$->typeName = $1;
         }
 |   enum_name
         { 
             $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
-            $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
+            $$->typeKind = ElaboratedTypeSpecifier::ENUMNAME;
             $$->typeName = $1;
         }
 |   typedef_name
         { 
             $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
-            $$->typeClass = ElaboratedTypeSpecifier::TYPEDEFNAME;
+            $$->typeKind = ElaboratedTypeSpecifier::TYPEDEFNAME;
             $$->typeName = $1;
         }
 ;
@@ -1103,14 +1103,14 @@ elaborated_type_specifier:
 |   ENUM enum_name
         { 
             $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
-            $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
+            $$->typeKind = ElaboratedTypeSpecifier::ENUMNAME;
             $$->typeName = $2;
             pc.PopQueryScopes();
         }
 |   ENUM nested_name_specifier enum_name
         {
             $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
-            $$->typeClass = ElaboratedTypeSpecifier::ENUMNAME;
+            $$->typeKind = ElaboratedTypeSpecifier::ENUMNAME;
             $$->typeName = $3;
             $$->nameSpec = $2;
             pc.PopQueryScopes();
@@ -1360,7 +1360,7 @@ function_definition:
                 throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
 
             auto edecl = static_cast<ElaboratedTypeSpecifier*>(decl->typeSpec.get());
-            if (edecl->typeClass != ElaboratedTypeSpecifier::CLASSNAME
+            if (edecl->typeKind != ElaboratedTypeSpecifier::CLASSNAME
                 || (edecl->typeName != pc.CurLocalScopeName() 
                     && (!edecl->nameSpec || edecl->nameSpec->path.back() != edecl->typeName)))
                 throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
@@ -1504,7 +1504,7 @@ forward_class_specifier:
     class_key identifier
         {
             $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
-            $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
+            $$->typeKind = ElaboratedTypeSpecifier::CLASSNAME;
             $$->typeName = $2;
 
             pc.AddName($$->typeName, ParseContext::CLASS);
@@ -1512,13 +1512,13 @@ forward_class_specifier:
 |   class_key class_name
         { 
             $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;
-            $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
+            $$->typeKind = ElaboratedTypeSpecifier::CLASSNAME;
             $$->typeName = $2;
         }
 |   class_key nested_name_specifier class_name
         { 
             $$ = MkNode<ElaboratedTypeSpecifier>(); $$->srcLocation = @$;  
-            $$->typeClass = ElaboratedTypeSpecifier::CLASSNAME;
+            $$->typeKind = ElaboratedTypeSpecifier::CLASSNAME;
             $$->typeName = $3;
             $$->nameSpec = $2;
             pc.PopQueryScopes();
@@ -1551,7 +1551,7 @@ member_declaration:
                 throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
 
             auto edecl = static_cast<ElaboratedTypeSpecifier*>(decl->typeSpec.get());
-            if (edecl->typeClass != ElaboratedTypeSpecifier::CLASSNAME
+            if (edecl->typeKind != ElaboratedTypeSpecifier::CLASSNAME
                 || edecl->typeName != pc.CurLocalScopeName())
                 throw syntax_error(@2, "expect member name or ';' after declaration specifiers");
 

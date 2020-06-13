@@ -6,6 +6,10 @@
 #include <unordered_map>
 #include <vector>
 
+namespace llvm {
+class Value;
+}
+
 struct Symbol
 {
     enum Attribute {
@@ -30,7 +34,12 @@ struct Symbol
         int intConstant;
 
         // non constant symbol offset
-        int offset;  // in bytes
+        struct
+        {
+            int          index;   // index of member in a scope
+            int          offset;  // in bytes
+            llvm::Value *value;   // llvm value (for local and global var)
+        };
     };
 
     Attribute Attr() const;
@@ -61,8 +70,7 @@ public:
                 ClassDescriptor *   classDesc = nullptr,
                 FunctionDescriptor *funcDesc  = nullptr);
 
-    // Remove all symbols.
-    void ClearAll();
+    // Set current offset to some value
     void SetStartOffset(int offset);
 
     // If symbol with same name already exists, returns null; otherwise returns
@@ -80,7 +88,6 @@ public:
     std::shared_ptr<EnumDescriptor>  QueryEnum(std::string id, bool qualified = false);
     Type *                           QueryTypedef(std::string id, bool qualified = false);
 
-    // Note: parent of root is still root
     SymbolTable *       GetParent();
     SymbolTable *       GetRoot();
     ClassDescriptor *   GetCurrentClass();
@@ -89,7 +96,10 @@ public:
     int                 ScopeLevel() const;
     int                 ScopeSize() const;  // in bytes
 
-    void Print(std::ostream &os) const;
+    // Get a sorted list of symbol, according to their index of insertion.
+    // Note: Constant are skipped.
+    std::vector<Symbol *> SortedSymbols();
+    void                  Print(std::ostream &os) const;
 
 private:
     SymbolTable *                                                     parent;
@@ -100,5 +110,6 @@ private:
     std::unordered_map<std::string, std::shared_ptr<EnumDescriptor>>  enumTypes;
     std::unordered_map<std::string, Type>                             typedefs;
 
+    int currentIndex;
     int currentOffset;
 };

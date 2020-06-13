@@ -32,7 +32,7 @@ enum class FundType {
     DOUBLE
 };
 
-enum class TypeClass { FUNDTYPE, ENUM, CLASS, FUNCTION };
+enum class TypeKind { FUNDTYPE, ENUM, CLASS, FUNCTION };
 
 enum class CVQualifier { NONE, CONST };
 

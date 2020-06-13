@@ -5,16 +5,18 @@
 
 const int   EnumStart   = yy::parser::token::IDENTIFIER;
 const char *EnumTable[] = {
-    "IDENTIFIER", "CLASSNAME", "ENUMNAME",   "TYPEDEFNAME", "INTVAL",   "FLOATVAL",  "CHARVAL",
-    "STRVAL",     "BOOLVAL",   "COLONCOLON", "DOTSTAR",     "SELFADD",  "SELFSUB",   "SELFMUL",
-    "SELFDIV",    "SELFMOD",   "SELFXOR",    "SELFAND",     "SELFOR",   "SHIFTLEFT", "SHIFTRIGHT",
-    "SELFSHL",    "SELFSHR",   "EQ",         "NE",          "LE",       "GE",        "LOGIAND",
-    "LOGIOR",     "SELFINC",   "SELFDEC",    "ARROWSTAR",   "ARROW",    "BOOL",      "BREAK",
-    "CASE",       "CHAR",      "CLASS",      "CONST",       "CONTINUE", "DEFAULT",   "DELETE",
-    "DO",         "DOUBLE",    "ELSE",       "ENUM",        "FLOAT",    "FOR",       "FRIEND",
-    "IF",         "INT",       "LONG",       "NEW",         "OPERATOR", "PRIVATE",   "PROTECTED",
-    "PUBLIC",     "RETURN",    "SHORT",      "SIGNED",      "SIZEOF",   "STATIC",    "STRUCT",
-    "SWITCH",     "THIS",      "TYPEDEF",    "UNSIGNED",    "VIRTUAL",  "VOID",      "WHILE"};
+    "IDENTIFIER", "CLASSNAME", "ENUMNAME",   "TYPEDEFNAME", "INTVAL",  "FLOATVAL",
+    "CHARVAL",    "STRVAL",    "BOOLVAL",    "COLONCOLON",  "DOTSTAR", "SELFADD",
+    "SELFSUB",    "SELFMUL",   "SELFDIV",    "SELFMOD",     "SELFXOR", "SELFAND",
+    "SELFOR",     "SHIFTLEFT", "SHIFTRIGHT", "SELFSHL",     "SELFSHR", "EQ",
+    "NE",         "LE",        "GE",         "LOGIAND",     "LOGIOR",  "SELFINC",
+    "SELFDEC",    "ARROWSTAR", "ARROW",      "BOOL",        "BREAK",   "CASE",
+    "CHAR",       "CLASS",     "CONST",      "CONTINUE",    "DEFAULT", "DELETE",
+    "DO",         "DOUBLE",    "ELSE",       "ENUM",        "FLOAT",   "FOR",
+    "FRIEND",     "IF",        "INT",        "LONG",        "NEW",     "OPERATOR",
+    "PRIVATE",    "PROTECTED", "PUBLIC",     "RETURN",      "SHORT",   "SIGNED",
+    "SIZEOF",     "STATIC",    "STRUCT",     "SWITCH",      "THIS",    "TYPEDEF",
+    "UNSIGNED",   "VIRTUAL",   "VOID",       "WHILE"};
 
 bool HasSemanticValue(int t)
 {
@@ -24,13 +26,20 @@ bool HasSemanticValue(int t)
 std::string SemanticValueToString(int t, const YYSTYPE &v)
 {
     switch (t) {
-    case yy::parser::token::IDENTIFIER: return v.as<std::string>();
-    case yy::parser::token::INTVAL: return std::to_string(v.as<intmax_t>());
-    case yy::parser::token::FLOATVAL: return std::to_string(v.as<double>());
-    case yy::parser::token::CHARVAL: return std::string("\'") + v.as<char>() + "\'";
-    case yy::parser::token::STRVAL: return "\"" + v.as<std::string>() + "\"";
-    case yy::parser::token::BOOLVAL: return v.as<bool>() ? "true" : "false";
-    default: return "";
+    case yy::parser::token::IDENTIFIER:
+        return v.as<std::string>();
+    case yy::parser::token::INTVAL:
+        return std::to_string(v.as<intmax_t>());
+    case yy::parser::token::FLOATVAL:
+        return std::to_string(v.as<double>());
+    case yy::parser::token::CHARVAL:
+        return std::string("\'") + v.as<char>() + "\'";
+    case yy::parser::token::STRVAL:
+        return "\"" + v.as<std::string>() + "\"";
+    case yy::parser::token::BOOLVAL:
+        return v.as<bool>() ? "true" : "false";
+    default:
+        return "";
     }
 }
 
@@ -53,7 +62,7 @@ int main(int argc, char *argv[])
     int          token;
     YYSTYPE      value;
     YYLTYPE      location;
-    size_t  index = 1;
+    size_t       index = 1;
     ParseContext pc;
 
     std::cout << std::string(80, '-') << '\n';

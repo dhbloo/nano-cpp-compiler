@@ -10,12 +10,10 @@
 #include <typeinfo>
 #include <vector>
 
-struct SemanticContext;
+struct CodegenContext;
 
 namespace ast {
 
-struct Indent;
-struct SyntaxStatus;
 struct Node;
 
 // Basic
@@ -125,7 +123,7 @@ using PtrVec = std::vector<Ptr<T>>;
 template <typename T, typename... Args>
 inline Ptr<T> MkNode(Args &&... args)
 {
-    return std::move(std::unique_ptr<T> {new T {std::forward<Args>(args)...}});
+    return std::make_unique<T>(std::forward<Args>(args)...);
 }
 
 template <typename T, typename V>
@@ -179,7 +177,7 @@ struct Node
 {
     yy::location srcLocation;
     virtual void Print(std::ostream &os, Indent indent) const = 0;
-    virtual void Analysis(SemanticContext &context) const;
+    virtual void Codegen(CodegenContext &context) const       = 0;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -191,7 +189,7 @@ struct TranslationUnit : Node
     PtrVec<Declaration> decls;
 
     void Print(std::ostream &os, Indent indent = {}) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct NameSpecifier : Node
@@ -200,7 +198,7 @@ struct NameSpecifier : Node
     bool                     isGlobal;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -216,7 +214,7 @@ struct AssignmentExpression : Expression
     Ptr<Expression> left, right;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct ConditionalExpression : Expression
@@ -224,7 +222,7 @@ struct ConditionalExpression : Expression
     Ptr<Expression> condition, trueExpr, falseExpr;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct BinaryExpression : Expression
@@ -233,7 +231,7 @@ struct BinaryExpression : Expression
     Ptr<Expression> left, right;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct CastExpression : Expression
@@ -242,7 +240,7 @@ struct CastExpression : Expression
     Ptr<Expression> expr;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct UnaryExpression : Expression
@@ -251,7 +249,7 @@ struct UnaryExpression : Expression
     Ptr<Expression> expr;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct CallExpression : Expression
@@ -260,7 +258,7 @@ struct CallExpression : Expression
     Ptr<ExpressionList> params;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct ConstructExpression : Expression
@@ -269,7 +267,7 @@ struct ConstructExpression : Expression
     Ptr<ExpressionList>          params;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct SizeofExpression : Expression
@@ -277,7 +275,7 @@ struct SizeofExpression : Expression
     Ptr<TypeId> typeId;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct NewExpression : Expression
@@ -292,7 +290,7 @@ struct PlainNew : NewExpression
     Ptr<TypeId> typeId;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct InitializableNew : NewExpression
@@ -303,7 +301,7 @@ struct InitializableNew : NewExpression
     Ptr<ExpressionList> initializer;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct DeleteExpression : Expression
@@ -312,7 +310,7 @@ struct DeleteExpression : Expression
     Ptr<Expression> expr;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct IdExpression : Expression
@@ -324,14 +322,14 @@ struct IdExpression : Expression
     SpecialType        stype;
 
     void                Print(std::ostream &os, Indent indent) const override;
-    void                Analysis(SemanticContext &context) const override;
-    virtual std::string ComposedId(SemanticContext &context) const;
+    void                Codegen(CodegenContext &context) const override;
+    virtual std::string ComposedId(CodegenContext &context) const;
 };
 
 struct ThisExpression : Expression
 {
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct LiteralExpression : Expression
@@ -342,7 +340,7 @@ struct IntLiteral : LiteralExpression
     intmax_t value;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct FloatLiteral : LiteralExpression
@@ -350,7 +348,7 @@ struct FloatLiteral : LiteralExpression
     double value;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct CharLiteral : LiteralExpression
@@ -358,7 +356,7 @@ struct CharLiteral : LiteralExpression
     char value;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct StringLiteral : LiteralExpression
@@ -366,7 +364,7 @@ struct StringLiteral : LiteralExpression
     std::string value;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct BoolLiteral : LiteralExpression
@@ -374,7 +372,7 @@ struct BoolLiteral : LiteralExpression
     bool value;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct ExpressionList : Node
@@ -382,7 +380,7 @@ struct ExpressionList : Node
     PtrVec<Expression> exprList;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -398,7 +396,7 @@ struct CaseStatement : Statement
     Ptr<Statement>  stmt;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct DefaultStatement : Statement
@@ -406,7 +404,7 @@ struct DefaultStatement : Statement
     Ptr<Statement> stmt;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct ExpressionStatement : Statement
@@ -414,7 +412,7 @@ struct ExpressionStatement : Statement
     Ptr<Expression> expr;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct CompoundStatement : Statement
@@ -422,7 +420,8 @@ struct CompoundStatement : Statement
     PtrVec<Statement> stmts;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
+    int  CountCase() const;
 };
 
 struct IfStatement : Statement
@@ -432,16 +431,16 @@ struct IfStatement : Statement
     Ptr<Statement>  falseStmt;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct SwitchStatement : Statement
 {
-    Ptr<Expression> condition;
-    Ptr<Statement>  stmt;
+    Ptr<Expression>        condition;
+    Ptr<CompoundStatement> stmt;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct WhileStatement : Statement
@@ -450,7 +449,7 @@ struct WhileStatement : Statement
     Ptr<Statement>  stmt;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct DoStatement : Statement
@@ -459,7 +458,7 @@ struct DoStatement : Statement
     Ptr<Statement>  stmt;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct ForStatement : Statement
@@ -476,7 +475,7 @@ struct ForStatement : Statement
     Ptr<Statement>  stmt;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct JumpStatement : Statement
@@ -487,7 +486,7 @@ struct JumpStatement : Statement
     Ptr<Expression> retExpr;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct DeclerationStatement : Statement
@@ -495,7 +494,7 @@ struct DeclerationStatement : Statement
     Ptr<BlockDeclaration> decl;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -517,7 +516,7 @@ struct BlockDeclaration : Declaration
     std::vector<InitDecl> initDeclList;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct DeclSpecifier : Node
@@ -530,7 +529,7 @@ struct DeclSpecifier : Node
     friend SyntaxStatus
          Combine(Ptr<DeclSpecifier> n1, Ptr<DeclSpecifier> n2, Ptr<DeclSpecifier> &out);
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct TypeSpecifier : Node
@@ -540,6 +539,7 @@ struct TypeSpecifier : Node
     friend SyntaxStatus
          Combine(Ptr<TypeSpecifier> n1, Ptr<TypeSpecifier> n2, Ptr<TypeSpecifier> &out);
     void Print(std::ostream &os, Indent indent) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct SimpleTypeSpecifier : TypeSpecifier
@@ -551,19 +551,19 @@ struct SimpleTypeSpecifier : TypeSpecifier
                                 Ptr<SimpleTypeSpecifier>  n2,
                                 Ptr<SimpleTypeSpecifier> &out);
     void                Print(std::ostream &os, Indent indent) const override;
-    void                Analysis(SemanticContext &context) const override;
+    void                Codegen(CodegenContext &context) const override;
 };
 
 struct ElaboratedTypeSpecifier : TypeSpecifier
 {
     enum ElaborateTypeClass { CLASSNAME, ENUMNAME, TYPEDEFNAME };
-    ElaborateTypeClass typeClass;
+    ElaborateTypeClass typeKind;
     Ptr<NameSpecifier> nameSpec;  // opt
     std::string        typeName;
 
     bool operator==(const ElaboratedTypeSpecifier &other);
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct ClassTypeSpecifier : TypeSpecifier
@@ -571,7 +571,7 @@ struct ClassTypeSpecifier : TypeSpecifier
     Ptr<ClassSpecifier> classType;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct EnumTypeSpecifier : TypeSpecifier
@@ -579,7 +579,7 @@ struct EnumTypeSpecifier : TypeSpecifier
     Ptr<EnumSpecifier> enumType;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct EnumSpecifier : Node
@@ -590,7 +590,7 @@ struct EnumSpecifier : Node
     std::vector<Enumerator> enumList;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -610,7 +610,7 @@ struct PtrSpecifier : Node
 
     friend Ptr<PtrSpecifier> Merge(Ptr<PtrSpecifier> p1, Ptr<PtrSpecifier> p2);
     void                     Print(std::ostream &os, Indent indent) const override;
-    void                     Analysis(SemanticContext &context) const override;
+    void                     Codegen(CodegenContext &context) const override;
 };
 
 struct Declarator : Node
@@ -623,7 +623,7 @@ struct Declarator : Node
     virtual bool IsFunctionDecl() const;
     virtual bool IsTypeConversionDecl() const;
     void         Print(std::ostream &os, Indent indent) const override;
-    void         Analysis(SemanticContext &context) const override;
+    void         Codegen(CodegenContext &context) const override;
 };
 
 struct FunctionDeclarator : Declarator
@@ -633,7 +633,7 @@ struct FunctionDeclarator : Declarator
 
     bool IsFunctionDecl() const;
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct ArrayDeclarator : Declarator
@@ -641,7 +641,7 @@ struct ArrayDeclarator : Declarator
     Ptr<Expression> size;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct IdDeclarator : Declarator
@@ -651,7 +651,7 @@ struct IdDeclarator : Declarator
     bool IsFunctionDecl() const;
     bool IsTypeConversionDecl() const;
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct TypeId : Node
@@ -660,7 +660,7 @@ struct TypeId : Node
     Ptr<Declarator>    abstractDecl;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct ParameterDeclaration : Node
@@ -670,7 +670,7 @@ struct ParameterDeclaration : Node
     Ptr<Expression>    defaultExpr;  // opt
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct FunctionDefinition : Declaration
@@ -681,7 +681,7 @@ struct FunctionDefinition : Declaration
     Ptr<CompoundStatement>        funcBody;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct Initializer : Node
@@ -695,7 +695,7 @@ struct AssignmentInitializer : ClauseInitializer
     Ptr<Expression> expr;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct ListInitializer : ClauseInitializer
@@ -703,7 +703,7 @@ struct ListInitializer : ClauseInitializer
     PtrVec<ClauseInitializer> initList;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct ParenthesisInitializer : Initializer
@@ -711,7 +711,7 @@ struct ParenthesisInitializer : Initializer
     Ptr<ExpressionList> exprList;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -731,7 +731,7 @@ struct ClassSpecifier : Node
 
     void MoveDefaultMember();
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct MemberList : Node
@@ -739,16 +739,16 @@ struct MemberList : Node
     PtrVec<MemberDeclaration> members, defaultMembers;
 
     size_t MemberCount() const;
-    void        Reverse();
-    void        MoveDefaultTo(Access access);
-    void        Print(std::ostream &os, Indent indent) const override;
-    void        Analysis(SemanticContext &context) const override;
+    void   Reverse();
+    void   MoveDefaultTo(Access access);
+    void   Print(std::ostream &os, Indent indent) const override;
+    void   Codegen(CodegenContext &context) const override;
 };
 
 struct MemberDeclaration : Node
 {
     Access access;
-    void   Analysis(SemanticContext &context) const override;
+    void   Codegen(CodegenContext &context) const override;
 };
 
 struct MemberDefinition : MemberDeclaration
@@ -757,7 +757,7 @@ struct MemberDefinition : MemberDeclaration
     PtrVec<MemberDeclarator> decls;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct MemberDeclarator : Node
@@ -767,7 +767,7 @@ struct MemberDeclarator : Node
     bool            isPure;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 struct MemberFunction : MemberDeclaration
@@ -775,7 +775,7 @@ struct MemberFunction : MemberDeclaration
     Ptr<FunctionDefinition> func;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -789,7 +789,7 @@ struct BaseSpecifier : Node
     std::string        className;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -802,8 +802,8 @@ struct ConversionFunctionId : IdExpression
     Ptr<PtrSpecifier>  ptrSpec;  // opt
 
     void        Print(std::ostream &os, Indent indent) const override;
-    std::string ComposedId(SemanticContext &context) const override;
-    void        Analysis(SemanticContext &context) const override;
+    std::string ComposedId(CodegenContext &context) const override;
+    void        Codegen(CodegenContext &context) const override;
 };
 
 struct CtorMemberInitializer : Node
@@ -814,7 +814,7 @@ struct CtorMemberInitializer : Node
     bool                isBaseCtor;
 
     void Print(std::ostream &os, Indent indent) const override;
-    void Analysis(SemanticContext &context) const override;
+    void Codegen(CodegenContext &context) const override;
 };
 
 /* ------------------------------------------------------------------------- *
@@ -826,7 +826,7 @@ struct OperatorFunctionId : IdExpression
     Operator overloadOp;
 
     void        Print(std::ostream &os, Indent indent) const override;
-    std::string ComposedId(SemanticContext &context) const override;
+    std::string ComposedId(CodegenContext &context) const override;
 };
 
 }  // namespace ast

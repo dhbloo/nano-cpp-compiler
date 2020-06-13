@@ -1,8 +1,10 @@
 #pragma once
 
+#include "../core/constant.h"
+#include "../core/symbol.h"
 #include "../parser/yylocation.h"
-#include "symbol.h"
-#include "constant.h"
+#include "codegen.h"
+#include "llvm.h"
 
 #include <list>
 #include <ostream>
@@ -15,13 +17,27 @@ enum class DeclState : std::uint8_t {
     FULLDECL    // new symbol
 };
 
-struct SemanticContext
+struct ExprState
 {
-    std::ostream &            errorStream;
-    std::ostream &            outputStream;
-    int &                     errCnt;
-    bool                      printAllSymtab;
-    std::vector<std::string> &stringTable;
+    bool isConstant;
+    union {
+        Constant     constant;
+        llvm::Value *value;
+    };
+    Constant *constOrNull() { return isConstant ? &constant : nullptr; }
+};
+
+struct CodegenContext
+{
+    std::ostream &errorStream;
+    std::ostream &outputStream;
+    int &         errCnt;
+    bool          printLocalTable;
+
+    llvm::LLVMContext &llvmContext;
+    llvm::Module &     module;
+    llvm::IRBuilder<> *IRBuilder;
+    CodeGenHelper &    cgHelper;
 
     SymbolTable *                    symtab;
     Type                             type;
@@ -29,20 +45,19 @@ struct SemanticContext
     Symbol                           newSymbol;
     SymbolTable *                    qualifiedScope;
     std::vector<Type::PtrDescriptor> ptrDescList;
-    std::list<SemanticContext> *     secondPassContext;
+    std::list<CodegenContext> *      secondPassContexts;
+
+    ExprState expr;
 
     struct
     {
-        bool     isConstant;
-        Constant constant;
-    } expr;
-
-    struct
-    {
-        bool keepScope;
-        bool isSwitchLevel;
-        bool isInSwitch;
-        bool isInLoop;
+        bool               keepScope;
+        bool               isSwitchLevel;
+        bool               isInSwitch;
+        bool               isInLoop;
+        llvm::BasicBlock * breakBB;
+        llvm::BasicBlock * continueBB;
+        llvm::SwitchInst * switchInst;
     } stmt;
 
     struct

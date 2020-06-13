@@ -1,17 +1,15 @@
 #include "../ast/node.h"
-#include "../core/semantic.h"
+#include "context.h"
 
 namespace ast {
 
-void Node::Analysis(SemanticContext &context) const {}
-
-void TranslationUnit::Analysis(SemanticContext &context) const
+void TranslationUnit::Codegen(CodegenContext &context) const
 {
     // Restore point
     for (const auto &n : decls) {
         context.decl = {DeclState::FULLDECL};
         try {
-            n->Analysis(context);
+            n->Codegen(context);
         }
         catch (SemanticError error) {
             context.errorStream << error;
@@ -20,7 +18,7 @@ void TranslationUnit::Analysis(SemanticContext &context) const
     }
 }
 
-void NameSpecifier::Analysis(SemanticContext &context) const
+void NameSpecifier::Codegen(CodegenContext &context) const
 {
     SymbolTable *symtab = context.symtab;
 

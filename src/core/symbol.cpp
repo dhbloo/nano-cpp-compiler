@@ -60,15 +60,9 @@ SymbolTable::SymbolTable(SymbolTable *       parent,
     : parent(parent)
     , classDesc(classDesc)
     , funcDesc(funcDesc)
+    , currentIndex(0)
     , currentOffset(0)
 {}
-
-void SymbolTable::ClearAll()
-{
-    symbols.clear();
-    classTypes.clear();
-    enumTypes.clear();
-}
 
 void SymbolTable::SetStartOffset(int offset)
 {
@@ -92,9 +86,9 @@ SymbolSet SymbolTable::AddSymbol(Symbol symbol)
                 }
             }
 
-            if (symbol.type.IsSimple(TypeClass::FUNCTION)) {
+            if (symbol.type.IsSimple(TypeKind::FUNCTION)) {
                 for (auto funcSym : set) {
-                    if (!funcSym->type.IsSimple(TypeClass::FUNCTION)) {
+                    if (!funcSym->type.IsSimple(TypeKind::FUNCTION)) {
                         // Allow derived class override variable from base class
                         if (isInCurScope)
                             return {};
@@ -103,7 +97,8 @@ SymbolSet SymbolTable::AddSymbol(Symbol symbol)
                     }
 
                     if (funcSym->type.Function()->HasSameSignatureWith(
-                            *symbol.type.Function(), true)) {
+                            *symbol.type.Function(),
+                            true)) {
                         // Found an identical function symbol (same name and signature)
                         if (isInCurScope) {
                             // Redeclaration of member function in the same scope is not
@@ -152,19 +147,20 @@ SymbolSet SymbolTable::AddSymbol(Symbol symbol)
         // Set symbol offset to current scope size
         // Offset alignment: alignment amount depends on size of
         // symbol type and max alignment requirement is 8 bytes.
-        int alignment = symbol.type.AlignmentSize();
-        if (alignment >= 8)
+        int alignment = symbol.type.IsArray() ? symbol.type.ElementType().Alignment()
+                                              : symbol.type.Alignment();
+        if (alignment == 8)
             currentOffset = (currentOffset + 7) & ~7;
-        else if (alignment >= 4)
+        else if (alignment == 4)
             currentOffset = (currentOffset + 3) & ~3;
-        else if (alignment >= 2)
+        else if (alignment == 2)
             currentOffset = (currentOffset + 1) & ~1;
 
+        symbol.index  = currentIndex++;
         symbol.offset = currentOffset;
         currentOffset += symbol.type.Size();
     }
 
-insert:
     auto it = symbols.insert(std::make_pair(symbol.id, symbol));
     return {&it->second, this};
 }
@@ -272,15 +268,14 @@ Type *SymbolTable::QueryTypedef(std::string id, bool qualified)
 
 SymbolTable *SymbolTable::GetParent()
 {
-    return parent ? parent : this;
+    return parent;
 }
 
 SymbolTable *SymbolTable::GetRoot()
 {
-    SymbolTable *symtab = GetParent();
-    while (GetParent() != symtab) {
-        symtab = GetParent();
-    }
+    SymbolTable *symtab = this;
+    while (symtab->GetParent())
+        symtab = symtab->GetParent();
     return symtab;
 }
 
@@ -304,18 +299,8 @@ FunctionDescriptor *SymbolTable::GetCurrentFunction()
 
 std::string SymbolTable::ScopeName() const
 {
-    if (classDesc) {
-        std::string name = classDesc->className;
-
-        for (SymbolTable *p = parent; p; p = p->parent) {
-            if (p->classDesc)
-                name = p->classDesc->className + "::" + name;
-            else
-                break;
-        }
-
-        return name;
-    }
+    if (classDesc)
+        return classDesc->FullName();
 
     if (parent)
         return "local(" + std::to_string(ScopeLevel()) + ")";
@@ -337,6 +322,22 @@ int SymbolTable::ScopeSize() const
     return currentOffset;
 }
 
+std::vector<Symbol *> SymbolTable::SortedSymbols()
+{
+    std::vector<Symbol *> sortedSymbols;
+
+    for (auto it = symbols.begin(); it != symbols.end(); it++) {
+        if (it->second.Attr() != Symbol::CONSTANT)
+            sortedSymbols.push_back(&it->second);
+    }
+
+    std::sort(sortedSymbols.begin(), sortedSymbols.end(), [](auto a, auto b) {
+        return a->index < b->index;
+    });
+
+    return std::move(sortedSymbols);
+}
+
 void SymbolTable::Print(std::ostream &os) const
 {
     using std::setw;
@@ -351,20 +352,12 @@ void SymbolTable::Print(std::ostream &os) const
         os << "标识符            类型                                      "
               "属性/访问 偏移/值\n";
 
-        std::vector<const Symbol *> sortedSymbols;
-        for (auto it = symbols.cbegin(); it != symbols.cend(); it++) {
-            sortedSymbols.push_back(&it->second);
-        }
+        auto sortedSymbols = const_cast<SymbolTable *>(this)->SortedSymbols();
 
-        std::sort(sortedSymbols.begin(),
-                  sortedSymbols.end(),
-                  [](const Symbol *a, const Symbol *b) {
-                      if (a->Attr() == Symbol::CONSTANT)
-                          return false;
-                      if (b->Attr() == Symbol::CONSTANT)
-                          return true;
-                      return a->offset < b->offset;
-                  });
+        for (auto it = symbols.begin(); it != symbols.end(); it++) {
+            if (it->second.Attr() == Symbol::CONSTANT)
+                sortedSymbols.push_back(const_cast<Symbol *>(&it->second));
+        }
 
         for (auto symbolPtr : sortedSymbols) {
             const Symbol &sym = *symbolPtr;
@@ -372,19 +365,35 @@ void SymbolTable::Print(std::ostream &os) const
             os << setw(17) << sym.id << ' ' << setw(41) << sym.type.Name() << ' ';
 
             switch (sym.Attr()) {
-            case Symbol::STATIC: os << "静态 "; break;
-            case Symbol::VIRTUAL: os << "虚   "; break;
-            case Symbol::PUREVIRTUAL: os << "纯虚 "; break;
-            case Symbol::CONSTANT: os << "常量 "; break;
-            default: os << "     "; break;
+            case Symbol::STATIC:
+                os << "静态 ";
+                break;
+            case Symbol::VIRTUAL:
+                os << "虚   ";
+                break;
+            case Symbol::PUREVIRTUAL:
+                os << "纯虚 ";
+                break;
+            case Symbol::CONSTANT:
+                os << "常量 ";
+                break;
+            default:
+                os << "     ";
+                break;
             }
 
             switch (sym.Access()) {
-            case Symbol::PUBLIC: os << "PUB  "; break;
-            case Symbol::PRIVATE: os << "PRI  "; break;
-            case Symbol::PROTECTED: os << "PRO  "; break;
+            case Symbol::PUBLIC:
+                os << "PUB  ";
+                break;
+            case Symbol::PRIVATE:
+                os << "PRI  ";
+                break;
+            case Symbol::PROTECTED:
+                os << "PRO  ";
+                break;
             default:
-                if (sym.type.typeClass == TypeClass::FUNCTION
+                if (sym.type.typeKind == TypeKind::FUNCTION
                     && sym.type.Function()->friendClass)
                     os << "FRI  ";
                 else
@@ -411,10 +420,17 @@ void SymbolTable::Print(std::ostream &os) const
                 os << ", 基类: " << it->second->baseClassDesc->className << ' ';
 
                 switch (it->second->baseAccess) {
-                case Access::PRIVATE: os << "(私有继承)"; break;
-                case Access::PROTECTED: os << "(保护继承)"; break;
-                case Access::PUBLIC: os << "(公有继承)"; break;
-                default: os << "(默认继承)";
+                case Access::PRIVATE:
+                    os << "(私有继承)";
+                    break;
+                case Access::PROTECTED:
+                    os << "(保护继承)";
+                    break;
+                case Access::PUBLIC:
+                    os << "(公有继承)";
+                    break;
+                default:
+                    os << "(默认继承)";
                 }
             }
             os << '\n';

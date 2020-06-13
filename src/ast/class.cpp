@@ -65,10 +65,18 @@ void MemberList::Print(std::ostream &os, Indent indent) const
     for (size_t i = 0; i < members.size(); i++) {
         os << indent + 1 << "成员[" << i << "]: ";
         switch (members[i]->access) {
-        case Access::PRIVATE: os << "(私有)"; break;
-        case Access::PROTECTED: os << "(保护)"; break;
-        case Access::PUBLIC: os << "(公有)"; break;
-        case Access::DEFAULT: os << "(默认)"; break;
+        case Access::PRIVATE:
+            os << "(私有)";
+            break;
+        case Access::PROTECTED:
+            os << "(保护)";
+            break;
+        case Access::PUBLIC:
+            os << "(公有)";
+            break;
+        case Access::DEFAULT:
+            os << "(默认)";
+            break;
         }
         os << ' ';
         members[i]->Print(os, indent + 1);
@@ -107,10 +115,17 @@ void BaseSpecifier::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "基类描述: " << className << ' ';
     switch (access) {
-    case Access::PRIVATE: os << "(私有继承)"; break;
-    case Access::PROTECTED: os << "(保护继承)"; break;
-    case Access::PUBLIC: os << "(公有继承)"; break;
-    default: os << "(默认继承)";
+    case Access::PRIVATE:
+        os << "(私有继承)";
+        break;
+    case Access::PROTECTED:
+        os << "(保护继承)";
+        break;
+    case Access::PUBLIC:
+        os << "(公有继承)";
+        break;
+    default:
+        os << "(默认继承)";
     }
     os << '\n';
     if (nameSpec)

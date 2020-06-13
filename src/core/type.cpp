@@ -1,6 +1,6 @@
 #include "type.h"
 
-#include "semantic.h"
+#include "constant.h"
 #include "symbol.h"
 
 #include <cassert>
@@ -9,28 +9,28 @@ static const int FundSizeTable[] = {0, 1, 1, 1, 2, 2, 4, 4, 8, 8, 4, 8};
 static const int PointerSize     = 8;
 
 Type::Type(FundType fundType, CVQualifier cv)
-    : typeClass(TypeClass::FUNDTYPE)
+    : typeKind(TypeKind::FUNDTYPE)
     , cv(cv)
     , fundType(fundType)
     , typeDesc(nullptr)
 {}
 
 Type::Type(std::shared_ptr<ClassDescriptor> classDesc, CVQualifier cv)
-    : typeClass(TypeClass::CLASS)
+    : typeKind(TypeKind::CLASS)
     , cv(cv)
     , typeDesc(classDesc)
     , fundType(FundType::VOID)
 {}
 
 Type::Type(std::shared_ptr<EnumDescriptor> enumDesc, CVQualifier cv)
-    : typeClass(TypeClass::ENUM)
+    : typeKind(TypeKind::ENUM)
     , cv(cv)
     , typeDesc(enumDesc)
     , fundType(FundType::VOID)
 {}
 
 Type::Type(std::shared_ptr<FunctionDescriptor> funcDesc, CVQualifier cv)
-    : typeClass(TypeClass::FUNCTION)
+    : typeKind(TypeKind::FUNCTION)
     , cv(cv)
     , typeDesc(funcDesc)
     , fundType(FundType::VOID)
@@ -38,7 +38,7 @@ Type::Type(std::shared_ptr<FunctionDescriptor> funcDesc, CVQualifier cv)
 
 ClassDescriptor *Type::Class() const
 {
-    if (typeClass == TypeClass::CLASS)
+    if (typeKind == TypeKind::CLASS)
         return static_cast<ClassDescriptor *>(typeDesc.get());
     else
         return nullptr;
@@ -46,7 +46,7 @@ ClassDescriptor *Type::Class() const
 
 EnumDescriptor *Type::Enum() const
 {
-    if (typeClass == TypeClass::ENUM)
+    if (typeKind == TypeKind::ENUM)
         return static_cast<EnumDescriptor *>(typeDesc.get());
     else
         return nullptr;
@@ -54,7 +54,7 @@ EnumDescriptor *Type::Enum() const
 
 FunctionDescriptor *Type::Function() const
 {
-    if (typeClass == TypeClass::FUNCTION)
+    if (typeKind == TypeKind::FUNCTION)
         return static_cast<FunctionDescriptor *>(typeDesc.get());
     else
         return nullptr;
@@ -62,14 +62,17 @@ FunctionDescriptor *Type::Function() const
 
 bool Type::operator==(const Type &rhs) const
 {
-    if (typeClass != rhs.typeClass || cv != rhs.cv || ptrDescList != rhs.ptrDescList
+    if (typeKind != rhs.typeKind || cv != rhs.cv || ptrDescList != rhs.ptrDescList
         || arrayDescList != rhs.arrayDescList)
         return false;
 
-    switch (typeClass) {
-    case TypeClass::FUNDTYPE: return fundType == rhs.fundType;
-    case TypeClass::FUNCTION: return *Function() == *rhs.Function();
-    default: return typeDesc == rhs.typeDesc;
+    switch (typeKind) {
+    case TypeKind::FUNDTYPE:
+        return fundType == rhs.fundType;
+    case TypeKind::FUNCTION:
+        return *Function() == *rhs.Function();
+    default:
+        return typeDesc == rhs.typeDesc;
     }
 }
 
@@ -159,18 +162,18 @@ std::string Type::Name(std::string innerName) const
     }
 
     // primary type
-    switch (typeClass) {
-    case TypeClass::FUNDTYPE:
+    switch (typeKind) {
+    case TypeKind::FUNDTYPE:
         name = std::string(FundTypeName[(int)fundType]);
         if (!postfix.empty())
             name += " " + postfix;
         break;
-    case TypeClass::ENUM:
+    case TypeKind::ENUM:
         name = Enum()->enumName;
         if (!postfix.empty())
             name += " " + postfix;
         break;
-    case TypeClass::CLASS:
+    case TypeKind::CLASS:
         name = Class()->className;
         if (!postfix.empty())
             name += " " + postfix;
@@ -195,7 +198,7 @@ std::string Type::Name(std::string innerName) const
         break;
     }
 
-    if (cv == CVQualifier::CONST && typeClass != TypeClass::FUNCTION)
+    if (cv == CVQualifier::CONST && typeKind != TypeKind::FUNCTION)
         name = "const " + name;
 
     return name;
@@ -205,8 +208,12 @@ std::string Type::PtrDescriptor::Name() const
 {
     std::string name;
     switch (ptrType) {
-    case PtrType::PTR: name = "*"; break;
-    case PtrType::REF: name = "&"; break;
+    case PtrType::PTR:
+        name = "*";
+        break;
+    case PtrType::REF:
+        name = "&";
+        break;
     case PtrType::CLASSPTR:
         name = " " + classDesc->memberTable->ScopeName() + "::*";
         break;
@@ -224,11 +231,19 @@ int Type::Size() const
         return PointerSize;
 
     int size;
-    switch (typeClass) {
-    case TypeClass::FUNDTYPE: size = FundSizeTable[(int)fundType]; break;
-    case TypeClass::ENUM: size = FundSizeTable[(int)FundType::INT]; break;
-    case TypeClass::CLASS: size = Class()->memberTable->ScopeSize(); break;
-    default: size = 0; break;
+    switch (typeKind) {
+    case TypeKind::FUNDTYPE:
+        size = FundSizeTable[(int)fundType];
+        break;
+    case TypeKind::ENUM:
+        size = FundSizeTable[(int)FundType::INT];
+        break;
+    case TypeKind::CLASS:
+        size = Class()->memberTable->ScopeSize();
+        break;
+    default:
+        size = 0;
+        break;
     }
 
     for (const auto &a : arrayDescList) {
@@ -240,9 +255,17 @@ int Type::Size() const
     return size;
 }
 
-int Type::AlignmentSize() const
+int Type::Alignment() const
 {
-    return ElementType().Size();
+    int size = Size();
+    if (size >= 8)
+        return 8;
+    else if (size >= 4)
+        return 4;
+    else if (size >= 2)
+        return 2;
+    else
+        return 1;
 }
 
 bool Type::IsConvertibleTo(const Type &target, Constant *constant) const
@@ -257,11 +280,11 @@ bool Type::IsConvertibleTo(const Type &target, Constant *constant) const
         return true;
 
     // 1. l-value to r-value
-    if (t.IsRef() && !target.IsRef() && !t.RemoveRef().IsSimple(TypeClass::FUNCTION)
+    if (t.IsRef() && !target.IsRef() && !t.RemoveRef().IsSimple(TypeKind::FUNCTION)
         && !t.RemoveRef().IsArray()) {
         t = t.RemoveRef();
         // remove cv for non class type
-        if (!t.IsSimple(TypeClass::CLASS))
+        if (!t.IsSimple(TypeKind::CLASS))
             t.cv = CVQualifier::NONE;
     }
     // 2. array (reference) to pointer
@@ -269,25 +292,31 @@ bool Type::IsConvertibleTo(const Type &target, Constant *constant) const
         t = t.RemoveRef().ElementType().AddPtrDesc(PtrDescriptor {PtrType::PTR});
     }
     // 3. function (reference) to pointer / member pointer
-    else if (t.RemoveRef().IsSimple(TypeClass::FUNCTION) && target.IsPtr()
-             && target.RemovePtr().IsSimple(TypeClass::FUNCTION)) {
+    else if (t.RemoveRef().IsSimple(TypeKind::FUNCTION) && target.IsPtr()
+             && target.RemovePtr().IsSimple(TypeKind::FUNCTION)) {
+        t = t.RemoveRef();
         if (!t.Function()->IsNonStaticMember())
-            t = t.RemoveRef().AddPtrDesc(PtrDescriptor {PtrType::PTR});
+            t.AddPtrDesc(PtrDescriptor {PtrType::PTR});
+        else
+            // member function to member pointer
+            t.AddPtrDesc(PtrDescriptor {PtrType::CLASSPTR,
+                                        CVQualifier::NONE,
+                                        t.Function()->funcScope->GetCurrentClass()});
     }
-    // r-value to const l-value (creates temporary)
+    // O. r-value to const l-value (creates temporary)
     else if (!t.IsRef() && target.IsRef() && target.cv == CVQualifier::CONST
-             && !t.IsSimple(TypeClass::FUNCTION)) {
+             && !t.IsSimple(TypeKind::FUNCTION)) {
         t.AddPtrDesc(PtrDescriptor {PtrType::REF});
         t.cv = CVQualifier::CONST;
     }
-    // function to function reference
-    else if (t.IsSimple(TypeClass::FUNCTION) && target.IsRef()
-             && target.RemoveRef().IsSimple(TypeClass::FUNCTION)) {
+    // O. function to function reference
+    else if (t.IsSimple(TypeKind::FUNCTION) && target.IsRef()
+             && target.RemoveRef().IsSimple(TypeKind::FUNCTION)) {
         t.AddPtrDesc(PtrDescriptor {PtrType::REF});
     }
 
     // 4~8, 10. numeric conversion & bool conversion
-    if (t.IsSimple(TypeClass::FUNDTYPE) && target.IsSimple(TypeClass::FUNDTYPE)) {
+    if (t.IsSimple(TypeKind::FUNDTYPE) && target.IsSimple(TypeKind::FUNDTYPE)) {
         if (t.fundType == FundType::VOID)
             return false;
         else if (constant)
@@ -295,16 +324,23 @@ bool Type::IsConvertibleTo(const Type &target, Constant *constant) const
 
         return true;
     }
-    // 4, 10. integer promotion: enum to int & bool conversion: enum to bool
-    else if (t.IsSimple(TypeClass::ENUM) && target.IsSimple(TypeClass::FUNDTYPE)) {
+    // 4, 10. integer promotion: enum to int (to float) & bool conversion: enum to bool
+    else if (t.IsSimple(TypeKind::ENUM) && target.IsSimple(TypeKind::FUNDTYPE)) {
         if (constant) {
             switch (target.fundType) {
-            case FundType::BOOL: constant->boolVal = (bool)(constant->intVal); break;
+            case FundType::BOOL:
+                constant->boolVal = (bool)(constant->intVal);
+                break;
             case FundType::CHAR:
-            case FundType::UCHAR: constant->charVal = (char)(constant->intVal); break;
+            case FundType::UCHAR:
+                constant->charVal = (char)(constant->intVal);
+                break;
             case FundType::FLOAT:
-            case FundType::DOUBLE: constant->floatVal = (double)(constant->intVal); break;
-            default: break;
+            case FundType::DOUBLE:
+                constant->floatVal = (double)(constant->intVal);
+                break;
+            default:
+                break;
             }
         }
         return true;
@@ -312,23 +348,23 @@ bool Type::IsConvertibleTo(const Type &target, Constant *constant) const
     // 9. pointer conversion
     else if (target.IsPtr()) {
         // literal '0' to pointer
-        if (t.IsSimple(TypeClass::FUNDTYPE) && t.fundType == FundType::INT) {
+        if (t.IsSimple(TypeKind::FUNDTYPE) && t.fundType == FundType::INT) {
             return constant && constant->intVal == 0;
         }
-        // object pointer to void pointer
-        else if (t.IsPtr() && t.RemovePtr().IsSimple(TypeClass::FUNDTYPE)
+        // object pointer to void* pointer
+        else if (t.IsPtr() && target.RemovePtr().IsSimple(TypeKind::FUNDTYPE)
                  && target.fundType == FundType::VOID) {
             return true;
         }
         // pointer to derived class to pointer to base class
-        else if (t.IsPtr() && t.RemovePtr().IsSimple(TypeClass::CLASS)
-                 && target.RemovePtr().IsSimple(TypeClass::CLASS)) {
+        else if (t.IsPtr() && t.RemovePtr().IsSimple(TypeKind::CLASS)
+                 && target.RemovePtr().IsSimple(TypeKind::CLASS)) {
             return target.Class()->IsBaseOf(*t.Class());
         }
         // TODO: member pointer conversion
     }
     // 10. bool conversion: pointer to bool
-    else if (t.IsPtr() && target.IsSimple(TypeClass::FUNDTYPE)
+    else if (t.IsPtr() && target.IsSimple(TypeKind::FUNDTYPE)
              && target.fundType == FundType::BOOL) {
         if (constant)
             constant->boolVal = (bool)(constant->intVal);
@@ -336,13 +372,12 @@ bool Type::IsConvertibleTo(const Type &target, Constant *constant) const
     }
 
     // 11. qualification adjustment
-    if (target.cv == CVQualifier::CONST && !t.IsSimple(TypeClass::FUNCTION)
-        && !target.IsSimple(TypeClass::FUNCTION)) {
+    if (target.cv == CVQualifier::CONST && !t.IsSimple(TypeKind::FUNCTION)
+        && !target.IsSimple(TypeKind::FUNCTION)) {
         t.cv = CVQualifier::CONST;
     }
 
-    auto convertPtrDesc = [](std::vector<Type::PtrDescriptor> &      pdl,
-                             const std::vector<Type::PtrDescriptor> &pdlTarget) {
+    auto convertPtrDesc = [](auto &pdl, const auto &pdlTarget) {
         if (pdl.size() == pdlTarget.size()) {
             for (size_t i = 0; i < pdl.size(); i++)
                 if (pdlTarget[i].cv == CVQualifier::CONST)
@@ -362,9 +397,9 @@ bool Type::IsConvertibleTo(const Type &target, Constant *constant) const
 
     // // Implicit conversion must be the same typeclass
     // // TODO: conversion operator or constructor?
-    // if (typeClass != target.typeClass) {
+    // if (typeKind != target.typeKind) {
     //     // ENUM type to INT
-    //     if (typeClass == TypeClass::ENUM && target.typeClass == TypeClass::FUNDTYPE)
+    //     if (typeKind == TypeKind::ENUM && target.typeKind == TypeKind::FUNDTYPE)
     //         return Type {FundType::INT}.IsConvertibleTo(target);
     //     else
     //         return false;
@@ -435,7 +470,7 @@ bool Type::IsConvertibleTo(const Type &target, Constant *constant) const
     //         return false;
     // }
 
-    // if (typeClass == TypeClass::FUNDTYPE) {
+    // if (typeKind == TypeKind::FUNDTYPE) {
     //     // implicit fundmental type conversion rules
     //     switch (target.fundType) {
     //     case FundType::BOOL: return true;
@@ -452,8 +487,8 @@ bool Type::IsConvertibleTo(const Type &target, Constant *constant) const
     //     default: return false;
     //     }
     // }
-    // else if (typeClass == TypeClass::FUNCTION) {
-    //     // assert(target.typeClass == TypeClass::FUNCTION)
+    // else if (typeKind == TypeKind::FUNCTION) {
+    //     // assert(target.typeKind == TypeKind::FUNCTION)
     //     return *Function() == *target.Function();
     // }
     // else {
@@ -483,20 +518,21 @@ bool Type::IsComplete() const
         return ElementType().IsComplete();
     }
 
-    switch (typeClass) {
-    case TypeClass::FUNDTYPE:
+    switch (typeKind) {
+    case TypeKind::FUNDTYPE:
         // void is incomplete type
         return fundType != FundType::VOID;
-    case TypeClass::CLASS:
+    case TypeKind::CLASS:
         // class without definition is incomplete type
         return Class()->memberTable != nullptr;
-    default: return true;
+    default:
+        return true;
     }
 }
 
-bool Type::IsSimple(TypeClass tc) const
+bool Type::IsSimple(TypeKind tc) const
 {
-    return typeClass == tc && ptrDescList.empty() && arrayDescList.empty();
+    return typeKind == tc && ptrDescList.empty() && arrayDescList.empty();
 }
 
 bool Type::IsRef() const
@@ -522,6 +558,20 @@ bool Type::IsArray() const
 size_t Type::ArraySize() const
 {
     return IsArray() ? arrayDescList.back().size : 0;
+}
+
+bool Type::IsConstInit() const
+{
+    assert(!IsSimple(TypeKind::FUNCTION));
+
+    if (IsRef())
+        return true;
+    else if (IsPtr() || IsMemberPtr())
+        return ptrDescList.back().cv == CVQualifier::CONST;
+    else if (IsArray())
+        return ElementType().IsConstInit();
+    else
+        return cv == CVQualifier::CONST;
 }
 
 Type &Type::AddPtrDesc(Type::PtrDescriptor ptrDesc)
@@ -551,11 +601,11 @@ Type Type::Decay() const
     Type t = *this;
 
     // 1. l-value to r-value
-    if (t.IsRef() && !t.RemoveRef().IsSimple(TypeClass::FUNCTION)
+    if (t.IsRef() && !t.RemoveRef().IsSimple(TypeKind::FUNCTION)
         && !t.RemoveRef().IsArray()) {
         t = t.RemoveRef();
         // remove cv for non class type
-        if (!t.IsSimple(TypeClass::CLASS))
+        if (!t.IsSimple(TypeKind::CLASS))
             t.cv = CVQualifier::NONE;
     }
     // 2. array (reference) to pointer
@@ -563,9 +613,15 @@ Type Type::Decay() const
         t = t.RemoveRef().ElementType().AddPtrDesc(PtrDescriptor {PtrType::PTR});
     }
     // 3. function (reference) to pointer
-    else if (t.RemoveRef().IsSimple(TypeClass::FUNCTION)) {
+    else if (t.RemoveRef().IsSimple(TypeKind::FUNCTION)) {
+        t = t.RemoveRef();
         if (!t.Function()->IsNonStaticMember())
-            t = t.RemoveRef().AddPtrDesc(PtrDescriptor {PtrType::PTR});
+            t.AddPtrDesc(PtrDescriptor {PtrType::PTR});
+        else
+            // member function to member pointer
+            t.AddPtrDesc(PtrDescriptor {PtrType::CLASSPTR,
+                                        CVQualifier::NONE,
+                                        t.Function()->funcScope->GetCurrentClass()});
     }
 
     return t;
@@ -575,11 +631,11 @@ Type Type::ArithmeticConvert(Type t2) const
 {
     Type t1 = *this;
 
-    if (t1.IsSimple(TypeClass::ENUM))
+    if (t1.IsSimple(TypeKind::ENUM))
         t1 = {FundType::INT};
-    if (t2.IsSimple(TypeClass::ENUM))
+    if (t2.IsSimple(TypeKind::ENUM))
         t2 = {FundType::INT};
-    if (t1.IsSimple(TypeClass::FUNDTYPE) && t2.IsSimple(TypeClass::FUNDTYPE)) {
+    if (t1.IsSimple(TypeKind::FUNDTYPE) && t2.IsSimple(TypeKind::FUNDTYPE)) {
         if (t1.fundType == FundType::DOUBLE || t2.fundType == FundType::DOUBLE)
             return {FundType::DOUBLE};
         else if (t1.fundType == FundType::FLOAT || t2.fundType == FundType::FLOAT)
@@ -616,6 +672,26 @@ Type Type::RemovePtr() const
     if (t.IsPtr())
         t.ptrDescList.pop_back();
     return t;
+}
+
+std::string ClassDescriptor::FullName() const
+{
+    std::string      name          = className;
+    ClassDescriptor *lastClassDesc = nullptr;
+
+    for (SymbolTable *p = memberTable->GetParent(); p; p = p->GetParent()) {
+        ClassDescriptor *classDesc = p->GetCurrentClass();
+        if (classDesc) {
+            if (classDesc != lastClassDesc) {
+                name          = classDesc->className + "::" + name;
+                lastClassDesc = classDesc;
+            }
+        }
+        else
+            break;
+    }
+
+    return name;
 }
 
 bool ClassDescriptor::IsBaseOf(const ClassDescriptor &classDesc) const

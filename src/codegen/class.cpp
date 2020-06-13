@@ -1,19 +1,19 @@
 #include "../ast/node.h"
-#include "../core/semantic.h"
+#include "context.h"
 
 #include <cassert>
 #include <list>
 
 namespace ast {
 
-void ClassSpecifier::Analysis(SemanticContext &context) const
+void ClassSpecifier::Codegen(CodegenContext &context) const
 {
     std::shared_ptr<ClassDescriptor> classDesc;
     SymbolTable *                    symtab    = nullptr;
     bool                             qualified = false;
 
     if (nameSpec) {
-        nameSpec->Analysis(context);
+        nameSpec->Codegen(context);
         std::swap(symtab, context.qualifiedScope);
         qualified = true;
     }
@@ -31,7 +31,10 @@ void ClassSpecifier::Analysis(SemanticContext &context) const
         classDesc            = std::make_shared<ClassDescriptor>();
         classDesc->className = identifier;
         if (classDesc->className.empty()) {
-            classDesc->className = "<anonymous class>";
+            if (key == CLASS)
+                classDesc->className = "<anonymous class>";
+            else
+                classDesc->className = "<anonymous struct>";
         }
 
         // Inject class name into symbol table
@@ -42,22 +45,22 @@ void ClassSpecifier::Analysis(SemanticContext &context) const
     classDesc->memberTable =
         std::make_shared<SymbolTable>(context.symtab, classDesc.get());
 
-    SemanticContext classContext(context);
+    CodegenContext classContext(context);
     classContext.symtab = classDesc->memberTable.get();
 
     if (baseSpec)
-        baseSpec->Analysis(classContext);
+        baseSpec->Codegen(classContext);
 
-    memberList->Analysis(classContext);
+    memberList->Codegen(classContext);
 
     context.type = {classDesc};
 }
 
-void MemberList::Analysis(SemanticContext &context) const
+void MemberList::Codegen(CodegenContext &context) const
 {
-    auto                       lastDecl = context.decl;
-    std::list<SemanticContext> secondPassContext;
-    context.secondPassContext = &secondPassContext;
+    auto                      lastDecl = context.decl;
+    std::list<CodegenContext> secondPassContexts;
+    context.secondPassContexts = &secondPassContexts;
 
     // Restore point
     // First pass: member declarations
@@ -66,7 +69,7 @@ void MemberList::Analysis(SemanticContext &context) const
             // Always follow last decl from upper scope
             context.decl                 = {lastDecl.state};
             context.decl.memberFirstPass = true;
-            m->Analysis(context);
+            m->Codegen(context);
         }
         catch (SemanticError error) {
             context.errorStream << error;
@@ -82,32 +85,38 @@ void MemberList::Analysis(SemanticContext &context) const
         try {
             // Always follow last decl from upper scope
             context.decl = {lastDecl.state};
-            m->Analysis(context);
+            m->Codegen(context);
         }
         catch (SemanticError error) {
             context.errorStream << error;
             context.errCnt++;
         }
-        secondPassContext.pop_front();
+        secondPassContexts.pop_front();
     }
 
-    context.decl              = lastDecl;
-    context.secondPassContext = nullptr;
+    context.decl               = lastDecl;
+    context.secondPassContexts = nullptr;
 }
 
-void MemberDeclaration::Analysis(SemanticContext &context) const
+void MemberDeclaration::Codegen(CodegenContext &context) const
 {
     switch (access) {
-    case Access::PRIVATE: context.decl.symbolAccessAttr = Symbol::PRIVATE; break;
-    case Access::PROTECTED: context.decl.symbolAccessAttr = Symbol::PROTECTED; break;
-    default: context.decl.symbolAccessAttr = Symbol::PUBLIC; break;
+    case Access::PRIVATE:
+        context.decl.symbolAccessAttr = Symbol::PRIVATE;
+        break;
+    case Access::PROTECTED:
+        context.decl.symbolAccessAttr = Symbol::PROTECTED;
+        break;
+    default:
+        context.decl.symbolAccessAttr = Symbol::PUBLIC;
+        break;
     }
 }
 
-void MemberDefinition::Analysis(SemanticContext &context) const
+void MemberDefinition::Codegen(CodegenContext &context) const
 {
     if (declSpec)
-        declSpec->Analysis(context);
+        declSpec->Codegen(context);
     else
         context.type = {FundType::VOID};
 
@@ -117,22 +126,22 @@ void MemberDefinition::Analysis(SemanticContext &context) const
                             srcLocation);
 
     if (!context.decl.isTypedef)
-        MemberDeclaration::Analysis(context);
+        MemberDeclaration::Codegen(context);
 
     Type decayType = context.type;
     auto savedDecl = context.decl;
 
     for (const auto &d : decls) {
-        d->Analysis(context);
+        d->Codegen(context);
 
         context.type = decayType;
         context.decl = savedDecl;
     }
 }
 
-void MemberDeclarator::Analysis(SemanticContext &context) const
+void MemberDeclarator::Codegen(CodegenContext &context) const
 {
-    decl->Analysis(context);
+    decl->Codegen(context);
 
     if (isPure) {
         if (context.symbolSet->Attr() == Symbol::VIRTUAL)
@@ -142,19 +151,22 @@ void MemberDeclarator::Analysis(SemanticContext &context) const
                                 srcLocation);
     }
     else if (constInit) {
+        // Note: context.type cannot be simple function, since it
+        // has been forbidden in syntax analysis.
+
         if (context.symbolSet->Attr() != Symbol::STATIC)
             throw SemanticError("in-class initialization of data member must be static",
                                 srcLocation);
 
-        if (context.type.cv != CVQualifier::CONST)
+        if (!context.type.IsConstInit())
             throw SemanticError(
                 "non-const static data member must be initialized out of line",
                 srcLocation);
 
-        SemanticContext newContext(context);
+        CodegenContext newContext(context);
         newContext.decl.state = DeclState::NODECL;
 
-        constInit->Analysis(newContext);
+        constInit->Codegen(newContext);
 
         if (!newContext.expr.isConstant)
             throw SemanticError("initialize expression is not constant", srcLocation);
@@ -166,13 +178,13 @@ void MemberDeclarator::Analysis(SemanticContext &context) const
     }
 }
 
-void MemberFunction::Analysis(SemanticContext &context) const
+void MemberFunction::Codegen(CodegenContext &context) const
 {
-    MemberDeclaration::Analysis(context);
-    func->Analysis(context);
+    MemberDeclaration::Codegen(context);
+    func->Codegen(context);
 }
 
-void BaseSpecifier::Analysis(SemanticContext &context) const
+void BaseSpecifier::Codegen(CodegenContext &context) const
 {
     auto classDesc = context.symtab->GetCurrentClass();
     assert(classDesc);
@@ -180,7 +192,7 @@ void BaseSpecifier::Analysis(SemanticContext &context) const
     SymbolTable *symtab    = nullptr;
     bool         qualified = false;
     if (nameSpec) {
-        nameSpec->Analysis(context);
+        nameSpec->Codegen(context);
         std::swap(symtab, context.qualifiedScope);
         qualified = true;
     }
@@ -199,13 +211,13 @@ void BaseSpecifier::Analysis(SemanticContext &context) const
     classDesc->memberTable->SetStartOffset(baseClassDesc->memberTable->ScopeSize());
 }
 
-void CtorMemberInitializer::Analysis(SemanticContext &context) const
+void CtorMemberInitializer::Codegen(CodegenContext &context) const
 {
     if (isBaseCtor) {
         SymbolTable *symtab    = nullptr;
         bool         qualified = false;
         if (nameSpec) {
-            nameSpec->Analysis(context);
+            nameSpec->Codegen(context);
             std::swap(symtab, context.qualifiedScope);
             qualified = true;
         }
@@ -250,20 +262,20 @@ void CtorMemberInitializer::Analysis(SemanticContext &context) const
         context.type = context.symbolSet->type;
     }
 
-    exprList->Analysis(context);
+    exprList->Codegen(context);
 }
 
-void ConversionFunctionId::Analysis(SemanticContext &context) const
+void ConversionFunctionId::Codegen(CodegenContext &context) const
 {
     Type funcType = context.type;
 
-    if (!funcType.IsSimple(TypeClass::FUNCTION))
+    if (!funcType.IsSimple(TypeKind::FUNCTION))
         throw SemanticError("function definition does not a function", srcLocation);
 
-    typeSpec->Analysis(context);
+    typeSpec->Codegen(context);
 
     if (ptrSpec) {
-        ptrSpec->Analysis(context);
+        ptrSpec->Codegen(context);
         context.type.ptrDescList = std::move(context.ptrDescList);
     }
 
@@ -271,23 +283,23 @@ void ConversionFunctionId::Analysis(SemanticContext &context) const
     funcType.Function()->retType = context.type;
     context.type                 = funcType;
 
-    IdExpression::Analysis(context);
+    IdExpression::Codegen(context);
 }
 
-std::string ConversionFunctionId::ComposedId(SemanticContext &context) const
+std::string ConversionFunctionId::ComposedId(CodegenContext &context) const
 {
-    SemanticContext newContext {context};
-    typeSpec->Analysis(newContext);
+    CodegenContext newContext {context};
+    typeSpec->Codegen(newContext);
 
     if (ptrSpec) {
-        ptrSpec->Analysis(newContext);
+        ptrSpec->Codegen(newContext);
         newContext.type.ptrDescList = std::move(newContext.ptrDescList);
     }
 
     return "operator " + newContext.type.Name() + "()";
 }
 
-std::string OperatorFunctionId::ComposedId(SemanticContext &context) const
+std::string OperatorFunctionId::ComposedId(CodegenContext &context) const
 {
     const char *OpNameTable[] = {
         "+",  "-",  "*",  "/",  "%",  "^",  "&",  "|",  "~",   "!",  "=",   "<",   ">",

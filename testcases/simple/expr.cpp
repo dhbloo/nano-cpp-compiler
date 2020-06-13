@@ -1,15 +1,96 @@
+int a = 5;
+int b;
+int arr[10];
+int arr2[10][10];
+
+struct S
+{
+    int x, y;
+    char c[10 * 10];
+};
+
+int g();
+
+float f(int i)
+{
+    int x = 0, *px = 0;
+    x   = 1 + 2 + 3;
+    x   = x + i + 1;
+    px  = &x;
+    *px = a;
+
+    return x;
+}
+
+int g()
+{
+    S s;
+
+    s.y = b;
+    s.x = s.y + 1;
+    s.c[a % 99] = 2;
+    return s.x;
+}
+
+int h(int x, int y)
+{
+    arr2[a][b] = x;
+
+    int *pa = arr;
+    pa[a]   = y;
+    return pa[y];
+}
 
 int main()
 {
-    int *x = new int, *a = new int(1 + 2 + 3);
-    int *y = new int[10], *b = new (int[5]);
-    int(*z)[20] = new int[10][20], (*c)[6] = new (int[5][6]);
+    b      = a + 1;
+    arr[3] = 5;
+    arr[a] = a;
 
-    z[0][0] += y[0] * *x;
+    if (b > 10) {
+        return b;
+    }
+    else {
+        ++a;
+    }
 
-    delete x;
-    delete[] y;
-    delete[] z;
-    delete[] b;
-    delete[] c;
+    a = 10;
+    while (a > 0) {
+        ++a;
+    }
+
+    b = 0;
+    do {
+        b = b * 2 + 1;
+    } while (b <= a + 10);
+
+    for (int i = 0; i < 100; ++i) {
+        a = a + i++;
+        if (a > 1000 || i > 50)
+            break;
+        else if (i & 1)
+            continue;
+
+        b = a + b;
+    }
+
+    a = b % 10;
+    switch (a) {
+    case 1:
+        a = 2;
+        break;
+    case 3:
+    case 4:
+        a = 5;
+        break;
+
+    default:
+        a = 0;
+        break;
+    }
+
+    f(100);
+    arr2[1][2] = g() + h(b, arr[a]);
+
+    return a + b;
 }

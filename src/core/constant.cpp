@@ -8,15 +8,21 @@ Constant Constant::Convert(FundType fromType, FundType toType) const
     Constant constant;
 
     switch (fromType) {
-    case FundType::BOOL: integral = boolVal; break;
+    case FundType::BOOL:
+        integral = boolVal;
+        break;
     case FundType::CHAR:
-    case FundType::UCHAR: integral = charVal; break;
+    case FundType::UCHAR:
+        integral = charVal;
+        break;
     case FundType::FLOAT:
     case FundType::DOUBLE:
         decimal   = floatVal;
         isDecimal = true;
         break;
-    default: integral = intVal; break;
+    default:
+        integral = intVal;
+        break;
     }
 
     switch (toType) {
@@ -31,7 +37,9 @@ Constant Constant::Convert(FundType fromType, FundType toType) const
     case FundType::DOUBLE:
         constant.floatVal = isDecimal ? (double)decimal : (double)integral;
         break;
-    default: constant.intVal = isDecimal ? (intmax_t)decimal : (intmax_t)integral; break;
+    default:
+        constant.intVal = isDecimal ? (intmax_t)decimal : (intmax_t)integral;
+        break;
     }
 
     return constant;
@@ -44,8 +52,12 @@ Constant Constant::UnaryOpResult(FundType type, UnaryOp uop) const
 
     switch (type) {
     case FundType::FLOAT:
-    case FundType::DOUBLE: isDecimal = true; break;
-    default: isDecimal = false; break;
+    case FundType::DOUBLE:
+        isDecimal = true;
+        break;
+    default:
+        isDecimal = false;
+        break;
     }
 
     switch (uop) {
@@ -55,9 +67,14 @@ Constant Constant::UnaryOpResult(FundType type, UnaryOp uop) const
         else
             constant.intVal = -intVal;
         break;
-    case UnaryOp::NOT: constant.intVal = ~intVal; break;
-    case UnaryOp::LOGINOT: constant.intVal = isDecimal ? !intVal : !floatVal; break;
-    default: break;
+    case UnaryOp::NOT:
+        constant.intVal = ~intVal;
+        break;
+    case UnaryOp::LOGINOT:
+        constant.intVal = isDecimal ? !intVal : !floatVal;
+        break;
+    default:
+        break;
     }
 
     return constant;
@@ -70,8 +87,12 @@ Constant Constant::BinaryOpResult(FundType type, BinaryOp bop, Constant con2) co
 
     switch (type) {
     case FundType::FLOAT:
-    case FundType::DOUBLE: isDecimal = true; break;
-    default: isDecimal = false; break;
+    case FundType::DOUBLE:
+        isDecimal = true;
+        break;
+    default:
+        isDecimal = false;
+        break;
     }
 
     switch (bop) {
@@ -107,8 +128,12 @@ Constant Constant::BinaryOpResult(FundType type, BinaryOp bop, Constant con2) co
         else
             constant.intVal = intVal - con2.intVal;
         break;
-    case BinaryOp::SHL: constant.intVal = intVal << con2.intVal; break;
-    case BinaryOp::SHR: constant.intVal = intVal >> con2.intVal; break;
+    case BinaryOp::SHL:
+        constant.intVal = intVal << con2.intVal;
+        break;
+    case BinaryOp::SHR:
+        constant.intVal = intVal >> con2.intVal;
+        break;
     case BinaryOp::GT:
         if (isDecimal)
             constant.floatVal = floatVal > con2.floatVal;
@@ -145,9 +170,15 @@ Constant Constant::BinaryOpResult(FundType type, BinaryOp bop, Constant con2) co
         else
             constant.intVal = intVal != con2.intVal;
         break;
-    case BinaryOp::AND: constant.intVal = intVal & con2.intVal; break;
-    case BinaryOp::XOR: constant.intVal = intVal ^ con2.intVal; break;
-    case BinaryOp::OR: constant.intVal = intVal | con2.intVal; break;
+    case BinaryOp::AND:
+        constant.intVal = intVal & con2.intVal;
+        break;
+    case BinaryOp::XOR:
+        constant.intVal = intVal ^ con2.intVal;
+        break;
+    case BinaryOp::OR:
+        constant.intVal = intVal | con2.intVal;
+        break;
     case BinaryOp::LOGIAND:
         if (isDecimal)
             constant.floatVal = floatVal && con2.floatVal;
@@ -160,7 +191,8 @@ Constant Constant::BinaryOpResult(FundType type, BinaryOp bop, Constant con2) co
         else
             constant.intVal = intVal || con2.intVal;
         break;
-    default: break;
+    default:
+        break;
     }
 
     return constant;

@@ -70,8 +70,7 @@ SyntaxStatus Combine(Ptr<SimpleTypeSpecifier>  n1,
 
 bool ElaboratedTypeSpecifier::operator==(const ElaboratedTypeSpecifier &n2)
 {
-    return nameSpec == n2.nameSpec && typeClass == n2.typeClass
-           && typeName == n2.typeName;
+    return nameSpec == n2.nameSpec && typeKind == n2.typeKind && typeName == n2.typeName;
 }
 
 void BlockDeclaration::Print(std::ostream &os, Indent indent) const
@@ -93,10 +92,18 @@ void DeclSpecifier::Print(std::ostream &os, Indent indent) const
     if (declAttr != NONE) {
         os << indent << "声明描述:";
         switch (declAttr) {
-        case STATIC: os << " (static)"; break;
-        case FRIEND: os << " (friend)"; break;
-        case VIRTUAL: os << " (virtual)"; break;
-        default: os << " (typedef)"; break;
+        case STATIC:
+            os << " (static)";
+            break;
+        case FRIEND:
+            os << " (friend)";
+            break;
+        case VIRTUAL:
+            os << " (virtual)";
+            break;
+        default:
+            os << " (typedef)";
+            break;
         }
 
         os << "\n";
@@ -136,10 +143,16 @@ void ElaboratedTypeSpecifier::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "详述类型描述: ";
 
-    switch (typeClass) {
-    case CLASSNAME: os << "(类)"; break;
-    case ENUMNAME: os << "(枚举)"; break;
-    case TYPEDEFNAME: os << "(类型别名)"; break;
+    switch (typeKind) {
+    case CLASSNAME:
+        os << "(类)";
+        break;
+    case ENUMNAME:
+        os << "(枚举)";
+        break;
+    case TYPEDEFNAME:
+        os << "(类型别名)";
+        break;
     }
 
     os << ' ' << typeName << (cv == CVQualifier::CONST ? " (const)\n" : "\n");

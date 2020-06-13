@@ -1,5 +1,5 @@
 #include "../ast/node.h"
-#include "../core/semantic.h"
+#include "context.h"
 
 #include <cassert>
 
@@ -11,14 +11,26 @@ FundType SimpleTypeSpecifier::GetFundType() const
     FundType      ft;
 
     switch ((int)fundTypePart & Mask) {
-    case (int)FundTypePart::VOID &  Mask: return FundType::VOID;
-    case (int)FundTypePart::BOOL &  Mask: return FundType::BOOL;
-    case (int)FundTypePart::FLOAT & Mask: return FundType::FLOAT;
-    case (int)FundTypePart::DOUBLE &Mask: return FundType::DOUBLE;
-    case (int)FundTypePart::SHORT & Mask: ft = FundType::SHORT; break;
-    case (int)FundTypePart::LONG &  Mask: ft = FundType::LONG; break;
-    case (int)FundTypePart::CHAR &  Mask: ft = FundType::CHAR; break;
-    default: ft = FundType::INT; break;
+    case (int)FundTypePart::VOID &Mask:
+        return FundType::VOID;
+    case (int)FundTypePart::BOOL &Mask:
+        return FundType::BOOL;
+    case (int)FundTypePart::FLOAT &Mask:
+        return FundType::FLOAT;
+    case (int)FundTypePart::DOUBLE &Mask:
+        return FundType::DOUBLE;
+    case (int)FundTypePart::SHORT &Mask:
+        ft = FundType::SHORT;
+        break;
+    case (int)FundTypePart::LONG &Mask:
+        ft = FundType::LONG;
+        break;
+    case (int)FundTypePart::CHAR &Mask:
+        ft = FundType::CHAR;
+        break;
+    default:
+        ft = FundType::INT;
+        break;
     }
 
     if ((int)fundTypePart & (int)FundTypePart::UNSIGNED)
@@ -27,12 +39,12 @@ FundType SimpleTypeSpecifier::GetFundType() const
         return ft;
 }
 
-void BlockDeclaration::Analysis(SemanticContext &context) const
+void BlockDeclaration::Codegen(CodegenContext &context) const
 {
     if (context.decl.isFriend && !initDeclList.empty())
         throw SemanticError("friends can only be classes or functions", srcLocation);
 
-    declSpec->Analysis(context);
+    declSpec->Codegen(context);
 
     auto savedDecl = context.decl;
     Type decayType = context.type;
@@ -40,11 +52,60 @@ void BlockDeclaration::Analysis(SemanticContext &context) const
     // Restore point
     for (const auto &d : initDeclList) {
         try {
-            d.declarator->Analysis(context);
+            d.declarator->Codegen(context);
+
+            SymbolSet             varSymbol = context.symbolSet;
+            llvm::GlobalVariable *globalVar = nullptr;
+            assert(varSymbol);
+
+            if (context.symtab->GetParent()) {
+                // Local variables
+                auto localVar = context.IRBuilder->CreateAlloca(
+                    context.cgHelper.MakeType(context.type),
+                    nullptr,
+                    varSymbol->id);
+                localVar->setAlignment(llvm::Align(context.type.Alignment()));
+                varSymbol->value = localVar;
+            }
+            else if (!varSymbol->type.IsSimple(TypeKind::FUNCTION)) {
+                // Global variables
+                varSymbol->value = context.module.getOrInsertGlobal(
+                    varSymbol->id,
+                    context.cgHelper.MakeType(context.type));
+                globalVar = context.module.getGlobalVariable(varSymbol->id);
+
+                globalVar->setConstant(context.type.IsConstInit());
+                globalVar->setAlignment(llvm::Align(context.type.Alignment()));
+                globalVar->setDSOLocal(true);
+                if (varSymbol->Attr() == Symbol::STATIC)
+                    globalVar->setLinkage(llvm::GlobalValue::InternalLinkage);
+                else
+                    globalVar->setLinkage(llvm::GlobalValue::CommonLinkage);
+            }
+            else {
+                // Function forward declaration
+                goto next_declarator;
+            }
 
             if (d.initializer) {
                 context.decl.state = DeclState::NODECL;
-                d.initializer->Analysis(context);
+                d.initializer->Codegen(context);
+            }
+            else if (context.type.IsConstInit()) {
+                // Const type must have a initializer
+                throw SemanticError("default initialization of an object of const type '"
+                                        + context.type.Name() + "'",
+                                    srcLocation);
+            }
+            else if (globalVar) {
+                // Global variable are zero initialized by default
+                if (varSymbol->type.IsSimple(TypeKind::CLASS)) {
+                    // TODO: find default constructor
+                    context.cgHelper.GenZeroInit(*context.IRBuilder, varSymbol);
+                }
+                else {
+                    context.cgHelper.GenZeroInit(*context.IRBuilder, varSymbol);
+                }
             }
         }
         catch (SemanticError error) {
@@ -52,29 +113,44 @@ void BlockDeclaration::Analysis(SemanticContext &context) const
             context.errCnt++;
         }
 
+    next_declarator:
         context.decl = savedDecl;
         context.type = decayType;
     }
 }
 
-void DeclSpecifier::Analysis(SemanticContext &context) const
+void DeclSpecifier::Codegen(CodegenContext &context) const
 {
     if (typeSpec)
-        typeSpec->Analysis(context);
+        typeSpec->Codegen(context);
     else
         context.type = {FundType::VOID};
 
     auto &attr = context.decl.symbolAccessAttr;
     switch (declAttr) {
-    case STATIC: attr = Symbol::Attribute(attr | Symbol::STATIC); break;
-    case VIRTUAL: attr = Symbol::Attribute(attr | Symbol::VIRTUAL); break;
-    case FRIEND: context.decl.isFriend = true; break;
-    case TYPEDEF: context.decl.isTypedef = true; break;
-    default: break;
+    case STATIC:
+        attr = Symbol::Attribute(attr | Symbol::STATIC);
+        break;
+    case VIRTUAL:
+        attr = Symbol::Attribute(attr | Symbol::VIRTUAL);
+        break;
+    case FRIEND:
+        if (!context.symtab->GetCurrentClass())
+            throw SemanticError("'friend' used outside of class", srcLocation);
+
+        context.decl.isFriend = true;
+        break;
+    case TYPEDEF:
+        context.decl.isTypedef = true;
+        break;
+    default:
+        break;
     }
 }
 
-void SimpleTypeSpecifier::Analysis(SemanticContext &context) const
+void TypeSpecifier::Codegen(CodegenContext &context) const {}
+
+void SimpleTypeSpecifier::Codegen(CodegenContext &context) const
 {
     if (context.decl.isFriend)
         throw SemanticError("friends can only be classes or functions", srcLocation);
@@ -82,13 +158,13 @@ void SimpleTypeSpecifier::Analysis(SemanticContext &context) const
     context.type = {GetFundType(), cv};
 }
 
-void ElaboratedTypeSpecifier::Analysis(SemanticContext &context) const
+void ElaboratedTypeSpecifier::Codegen(CodegenContext &context) const
 {
     SymbolTable *symtab    = nullptr;
     bool         qualified = false;
 
     if (nameSpec) {
-        nameSpec->Analysis(context);
+        nameSpec->Codegen(context);
         std::swap(symtab, context.qualifiedScope);
         qualified = true;
     }
@@ -96,7 +172,7 @@ void ElaboratedTypeSpecifier::Analysis(SemanticContext &context) const
         symtab = context.symtab;
     }
 
-    switch (typeClass) {
+    switch (typeKind) {
     case CLASSNAME: {
         auto classDesc = symtab->QueryClass(typeName, qualified);
         if (!classDesc) {
@@ -152,7 +228,7 @@ void ElaboratedTypeSpecifier::Analysis(SemanticContext &context) const
     }
 }
 
-void ClassTypeSpecifier::Analysis(SemanticContext &context) const
+void ClassTypeSpecifier::Codegen(CodegenContext &context) const
 {
     if (context.decl.state != DeclState::FULLDECL
         && context.decl.state != DeclState::LOCALDECL)
@@ -161,11 +237,11 @@ void ClassTypeSpecifier::Analysis(SemanticContext &context) const
     if (context.decl.isFriend)
         throw SemanticError("cannot define a type in a friend declaration", srcLocation);
 
-    classType->Analysis(context);
+    classType->Codegen(context);
     context.type.cv = cv;
 }
 
-void EnumTypeSpecifier::Analysis(SemanticContext &context) const
+void EnumTypeSpecifier::Codegen(CodegenContext &context) const
 {
     if (context.decl.state != DeclState::FULLDECL
         && context.decl.state != DeclState::LOCALDECL)
@@ -174,11 +250,11 @@ void EnumTypeSpecifier::Analysis(SemanticContext &context) const
     if (context.decl.isFriend)
         throw SemanticError("cannot define a type in a friend declaration", srcLocation);
 
-    enumType->Analysis(context);
+    enumType->Codegen(context);
     context.type.cv = cv;
 }
 
-void EnumSpecifier::Analysis(SemanticContext &context) const
+void EnumSpecifier::Codegen(CodegenContext &context) const
 {
     auto enumDesc      = std::make_shared<EnumDescriptor>();
     enumDesc->enumName = identifier;
@@ -197,7 +273,7 @@ void EnumSpecifier::Analysis(SemanticContext &context) const
             context.decl.state = DeclState::NODECL;
 
             try {
-                e.second->Analysis(context);
+                e.second->Codegen(context);
                 context.decl = lastDecl;
             }
             catch (SemanticError error) {

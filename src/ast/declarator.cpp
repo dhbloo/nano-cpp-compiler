@@ -67,9 +67,15 @@ void PtrSpecifier::Print(std::ostream &os, Indent indent) const
     for (size_t i = 0; i < ptrList.size(); i++) {
         os << indent + 1 << "修饰[" << i << "]: ";
         switch (ptrList[i].ptrType) {
-        case PtrType::PTR: os << "指针"; break;
-        case PtrType::REF: os << "引用"; break;
-        case PtrType::CLASSPTR: os << "成员指针"; break;
+        case PtrType::PTR:
+            os << "指针";
+            break;
+        case PtrType::REF:
+            os << "引用";
+            break;
+        case PtrType::CLASSPTR:
+            os << "成员指针";
+            break;
         }
         os << (ptrList[i].cv == CVQualifier::CONST ? " (const)\n" : "\n");
 
