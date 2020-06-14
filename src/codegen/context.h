@@ -24,6 +24,8 @@ struct ExprState
         Constant     constant;
         llvm::Value *value;
     };
+    ExprState() = default;
+    ExprState(llvm::Value *val) : value(val), isConstant(false) {}
     Constant *constOrNull() { return isConstant ? &constant : nullptr; }
 };
 

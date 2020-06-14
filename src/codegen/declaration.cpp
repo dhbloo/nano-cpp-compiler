@@ -79,8 +79,6 @@ void BlockDeclaration::Codegen(CodegenContext &context) const
                 globalVar->setDSOLocal(true);
                 if (varSymbol->Attr() == Symbol::STATIC)
                     globalVar->setLinkage(llvm::GlobalValue::InternalLinkage);
-                else
-                    globalVar->setLinkage(llvm::GlobalValue::CommonLinkage);
             }
             else {
                 // Function forward declaration

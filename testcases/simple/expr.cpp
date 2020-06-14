@@ -5,7 +5,7 @@ int arr2[10][10];
 
 struct S
 {
-    int x, y;
+    int  x, y;
     char c[10 * 10];
 };
 
@@ -26,8 +26,8 @@ int g()
 {
     S s;
 
-    s.y = b;
-    s.x = s.y + 1;
+    s.y         = b;
+    s.x         = s.y + 1;
     s.c[a % 99] = 2;
     return s.x;
 }
@@ -49,6 +49,7 @@ int main()
 
     if (b > 10) {
         return b;
+        b++;
     }
     else {
         ++a;
@@ -56,7 +57,7 @@ int main()
 
     a = 10;
     while (a > 0) {
-        ++a;
+        --a;
     }
 
     b = 0;
@@ -70,6 +71,8 @@ int main()
             break;
         else if (i & 1)
             continue;
+        else if (a > 500 && i == 32)
+            a = a - 5;
 
         b = a + b;
     }

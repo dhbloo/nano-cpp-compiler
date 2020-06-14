@@ -117,7 +117,11 @@ llvm::Value *CodeGenHelper::ConvertType(llvm::IRBuilder<> &IRBuilder,
     else if (fromT.RemoveRef().IsArray() && toT.IsPtr()) {
         fromT = fromT.RemoveRef().ElementType().AddPtrDesc(
             ::Type::PtrDescriptor {PtrType::PTR});
-        toV = IRBuilder.CreateBitOrPointerCast(fromV, MakeType(fromT));
+
+        std::array<Value *, 2> idx;
+        idx[0] = CreateZeroConstant();
+        idx[1] = CreateZeroConstant();
+        toV    = IRBuilder.CreateInBoundsGEP(fromV, idx);
     }
     // 3. function (reference) to pointer / member pointer
     else if (fromT.RemoveRef().IsSimple(TypeKind::FUNCTION) && toT.IsPtr()
@@ -215,9 +219,10 @@ void CodeGenHelper::GenAssignInit(IRBuilder<> &    IRBuilder,
                                          Align(varSymbol->type.Alignment()));
         }
         else {
-            IRBuilder.CreateAlignedStore(expr.value,
-                                         varSymbol->value,
-                                         Align(varSymbol->type.Alignment()));
+            IRBuilder.CreateAlignedStore(
+                ConvertType(IRBuilder, exprType, varSymbol->type, expr.value),
+                varSymbol->value,
+                Align(varSymbol->type.Alignment()));
         }
     }
     else {

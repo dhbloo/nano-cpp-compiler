@@ -20,14 +20,13 @@ void CaseStatement::Codegen(CodegenContext &context) const
                                 + "' is not convertible to integral",
                             srcLocation);
 
-    auto function = llvm::cast<llvm::Function>(
-        context.symtab->GetCurrentFunction()->defSymbol->value);
+    auto function    = context.IRBuilder->GetInsertBlock()->getParent();
+    auto caseBB      = llvm::BasicBlock::Create(context.llvmContext, "case", function);
     auto constantInt = llvm::cast<llvm::ConstantInt>(
         context.cgHelper.CreateConstant(FundType::INT, context.expr.constant));
-    auto caseBB = llvm::BasicBlock::Create(context.llvmContext, "case", function);
 
     context.stmt.switchInst->addCase(constantInt, caseBB);
-    if (!llvm::isa<llvm::BranchInst>(*--context.IRBuilder->GetInsertPoint()))
+    if (!context.IRBuilder->GetInsertBlock()->getTerminator())
         context.IRBuilder->CreateBr(caseBB);
     context.IRBuilder->SetInsertPoint(caseBB);
 
@@ -41,7 +40,7 @@ void DefaultStatement::Codegen(CodegenContext &context) const
 
     auto defaultBB = context.stmt.switchInst->getDefaultDest();
 
-    if (!llvm::isa<llvm::BranchInst>(*--context.IRBuilder->GetInsertPoint()))
+    if (!context.IRBuilder->GetInsertBlock()->getTerminator())
         context.IRBuilder->CreateBr(defaultBB);
     context.IRBuilder->SetInsertPoint(defaultBB);
 
@@ -75,6 +74,10 @@ void CompoundStatement::Codegen(CodegenContext &context) const
             context.errorStream << error;
             context.errCnt++;
         }
+
+        // If the block has ended, further statement can be omited
+        if (newContext.IRBuilder->GetInsertBlock()->getTerminator())
+            break;
     }
 
     // Leave local scope
@@ -106,35 +109,34 @@ void IfStatement::Codegen(CodegenContext &context) const
                             srcLocation);
 
     if (context.expr.isConstant) {
-        context.expr.value =
-            context.cgHelper.CreateConstant(context.type, context.expr.constant);
+        context.expr =
+            context.cgHelper.CreateConstant(FundType::BOOL, context.expr.constant);
     }
     else {
-        context.expr.value = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                          context.type,
-                                                          FundType::BOOL,
-                                                          context.expr.value);
+        context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
+                                                    context.type,
+                                                    FundType::BOOL,
+                                                    context.expr.value);
     }
 
-    auto function = llvm::cast<llvm::Function>(
-        context.symtab->GetCurrentFunction()->defSymbol->value);
-    auto thenBB  = llvm::BasicBlock::Create(context.llvmContext, "if.then", function);
-    auto elseBB  = llvm::BasicBlock::Create(context.llvmContext, "if.else");
-    auto mergeBB = llvm::BasicBlock::Create(context.llvmContext, "if.merge");
+    auto function = context.IRBuilder->GetInsertBlock()->getParent();
+    auto thenBB   = llvm::BasicBlock::Create(context.llvmContext, "if.then", function);
+    auto elseBB   = llvm::BasicBlock::Create(context.llvmContext, "if.else");
+    auto mergeBB  = llvm::BasicBlock::Create(context.llvmContext, "if.merge");
     context.IRBuilder->CreateCondBr(context.expr.value, thenBB, elseBB);
 
     context.IRBuilder->SetInsertPoint(thenBB);
     trueStmt->Codegen(context);
-    context.IRBuilder->CreateBr(mergeBB);
-    // thenBB = context.IRBuilder->GetInsertBlock();
+    if (!context.IRBuilder->GetInsertBlock()->getTerminator())
+        context.IRBuilder->CreateBr(mergeBB);
 
     function->getBasicBlockList().push_back(elseBB);
+    context.IRBuilder->SetInsertPoint(elseBB);
     if (falseStmt) {
-        context.IRBuilder->SetInsertPoint(elseBB);
         falseStmt->Codegen(context);
     }
-    context.IRBuilder->CreateBr(mergeBB);
-    // elseBB = context.IRBuilder->GetInsertBlock();
+    if (!context.IRBuilder->GetInsertBlock()->getTerminator())
+        context.IRBuilder->CreateBr(mergeBB);
 
     function->getBasicBlockList().push_back(mergeBB);
     context.IRBuilder->SetInsertPoint(mergeBB);
@@ -149,8 +151,7 @@ void SwitchStatement::Codegen(CodegenContext &context) const
     context.stmt.isInSwitch    = true;
     context.stmt.isSwitchLevel = true;
 
-    auto function = llvm::cast<llvm::Function>(
-        context.symtab->GetCurrentFunction()->defSymbol->value);
+    auto function  = context.IRBuilder->GetInsertBlock()->getParent();
     auto defaultBB = llvm::BasicBlock::Create(context.llvmContext, "switch.default");
     auto endBB     = llvm::BasicBlock::Create(context.llvmContext, "switch.end");
 
@@ -160,14 +161,14 @@ void SwitchStatement::Codegen(CodegenContext &context) const
                             srcLocation);
 
     if (context.expr.isConstant) {
-        context.expr.value =
-            context.cgHelper.CreateConstant(context.type, context.expr.constant);
+        context.expr =
+            context.cgHelper.CreateConstant(FundType::INT, context.expr.constant);
     }
     else {
-        context.expr.value = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                          context.type,
-                                                          FundType::INT,
-                                                          context.expr.value);
+        context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
+                                                    context.type,
+                                                    FundType::INT,
+                                                    context.expr.value);
     }
 
     context.stmt.switchInst =
@@ -178,7 +179,7 @@ void SwitchStatement::Codegen(CodegenContext &context) const
 
     function->getBasicBlockList().push_back(defaultBB);
     context.IRBuilder->SetInsertPoint(defaultBB);
-    if (!llvm::isa<llvm::BranchInst>(*--context.IRBuilder->GetInsertPoint()))
+    if (!context.IRBuilder->GetInsertBlock()->getTerminator())
         context.IRBuilder->CreateBr(endBB);
 
     function->getBasicBlockList().push_back(endBB);
@@ -194,15 +195,15 @@ void WhileStatement::Codegen(CodegenContext &context) const
     context.stmt.isSwitchLevel = false;
     context.stmt.isInLoop      = true;
 
-    auto function = llvm::cast<llvm::Function>(
-        context.symtab->GetCurrentFunction()->defSymbol->value);
-    auto condBB = llvm::BasicBlock::Create(context.llvmContext, "while.cond", function);
-    auto loopBB = llvm::BasicBlock::Create(context.llvmContext, "while.loop");
-    auto endBB  = llvm::BasicBlock::Create(context.llvmContext, "while.end");
+    auto function = context.IRBuilder->GetInsertBlock()->getParent();
+    auto condBB   = llvm::BasicBlock::Create(context.llvmContext, "while.cond", function);
+    auto loopBB   = llvm::BasicBlock::Create(context.llvmContext, "while.loop");
+    auto endBB    = llvm::BasicBlock::Create(context.llvmContext, "while.end");
     context.stmt.breakBB    = endBB;
     context.stmt.continueBB = condBB;
 
-    context.IRBuilder->CreateBr(condBB);
+    if (!context.IRBuilder->GetInsertBlock()->getTerminator())
+        context.IRBuilder->CreateBr(condBB);
     context.IRBuilder->SetInsertPoint(condBB);
 
     condition->Codegen(context);
@@ -211,14 +212,14 @@ void WhileStatement::Codegen(CodegenContext &context) const
                             srcLocation);
 
     if (context.expr.isConstant) {
-        context.expr.value =
-            context.cgHelper.CreateConstant(context.type, context.expr.constant);
+        context.expr =
+            context.cgHelper.CreateConstant(FundType::BOOL, context.expr.constant);
     }
     else {
-        context.expr.value = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                          context.type,
-                                                          FundType::BOOL,
-                                                          context.expr.value);
+        context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
+                                                    context.type,
+                                                    FundType::BOOL,
+                                                    context.expr.value);
     }
 
     context.IRBuilder->CreateCondBr(context.expr.value, loopBB, endBB);
@@ -227,7 +228,8 @@ void WhileStatement::Codegen(CodegenContext &context) const
 
     stmt->Codegen(context);
 
-    context.IRBuilder->CreateBr(condBB);
+    if (!context.IRBuilder->GetInsertBlock()->getTerminator())
+        context.IRBuilder->CreateBr(condBB);
     function->getBasicBlockList().push_back(endBB);
     context.IRBuilder->SetInsertPoint(endBB);
 
@@ -241,20 +243,21 @@ void DoStatement::Codegen(CodegenContext &context) const
     context.stmt.isSwitchLevel = false;
     context.stmt.isInLoop      = true;
 
-    auto function = llvm::cast<llvm::Function>(
-        context.symtab->GetCurrentFunction()->defSymbol->value);
-    auto loopBB = llvm::BasicBlock::Create(context.llvmContext, "do.loop", function);
-    auto condBB = llvm::BasicBlock::Create(context.llvmContext, "do.cond");
-    auto endBB  = llvm::BasicBlock::Create(context.llvmContext, "do.end");
+    auto function = context.IRBuilder->GetInsertBlock()->getParent();
+    auto loopBB   = llvm::BasicBlock::Create(context.llvmContext, "do.loop", function);
+    auto condBB   = llvm::BasicBlock::Create(context.llvmContext, "do.cond");
+    auto endBB    = llvm::BasicBlock::Create(context.llvmContext, "do.end");
     context.stmt.breakBB    = endBB;
     context.stmt.continueBB = condBB;
 
-    context.IRBuilder->CreateBr(loopBB);
+    if (!context.IRBuilder->GetInsertBlock()->getTerminator())
+        context.IRBuilder->CreateBr(loopBB);
     context.IRBuilder->SetInsertPoint(loopBB);
 
     stmt->Codegen(context);
 
-    context.IRBuilder->CreateBr(condBB);
+    if (!context.IRBuilder->GetInsertBlock()->getTerminator())
+        context.IRBuilder->CreateBr(condBB);
     function->getBasicBlockList().push_back(condBB);
     context.IRBuilder->SetInsertPoint(condBB);
 
@@ -264,14 +267,14 @@ void DoStatement::Codegen(CodegenContext &context) const
                             srcLocation);
 
     if (context.expr.isConstant) {
-        context.expr.value =
-            context.cgHelper.CreateConstant(context.type, context.expr.constant);
+        context.expr =
+            context.cgHelper.CreateConstant(FundType::BOOL, context.expr.constant);
     }
     else {
-        context.expr.value = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                          context.type,
-                                                          FundType::BOOL,
-                                                          context.expr.value);
+        context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
+                                                    context.type,
+                                                    FundType::BOOL,
+                                                    context.expr.value);
     }
 
     context.IRBuilder->CreateCondBr(context.expr.value, loopBB, endBB);
@@ -299,36 +302,37 @@ void ForStatement::Codegen(CodegenContext &context) const
         newContext.decl.state = DeclState::NODECL;
     }
 
-    auto function = llvm::cast<llvm::Function>(
-        context.symtab->GetCurrentFunction()->defSymbol->value);
-    auto condBB = llvm::BasicBlock::Create(context.llvmContext, "for.cond", function);
-    auto iterBB = llvm::BasicBlock::Create(context.llvmContext, "for.iter");
-    auto loopBB = llvm::BasicBlock::Create(context.llvmContext, "for.loop");
-    auto endBB  = llvm::BasicBlock::Create(context.llvmContext, "for.end");
+    auto function = context.IRBuilder->GetInsertBlock()->getParent();
+    auto condBB   = llvm::BasicBlock::Create(context.llvmContext, "for.cond", function);
+    auto iterBB   = llvm::BasicBlock::Create(context.llvmContext, "for.iter");
+    auto loopBB   = llvm::BasicBlock::Create(context.llvmContext, "for.loop");
+    auto endBB    = llvm::BasicBlock::Create(context.llvmContext, "for.end");
     newContext.stmt.breakBB    = endBB;
     newContext.stmt.continueBB = iterBB;
 
-    context.IRBuilder->CreateBr(condBB);
+    if (!context.IRBuilder->GetInsertBlock()->getTerminator())
+        context.IRBuilder->CreateBr(condBB);
     context.IRBuilder->SetInsertPoint(condBB);
 
     if (condition) {
         condition->Codegen(newContext);
-        if (!newContext.type.IsConvertibleTo(FundType::BOOL, context.expr.constOrNull()))
+        if (!newContext.type.IsConvertibleTo(FundType::BOOL,
+                                             newContext.expr.constOrNull()))
             throw SemanticError(newContext.type.Name() + " is not convertible to bool",
                                 srcLocation);
 
-        if (context.expr.isConstant) {
-            context.expr.value =
-                context.cgHelper.CreateConstant(context.type, context.expr.constant);
+        if (newContext.expr.isConstant) {
+            newContext.expr =
+                context.cgHelper.CreateConstant(FundType::BOOL, newContext.expr.constant);
         }
         else {
-            context.expr.value = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                              context.type,
-                                                              FundType::BOOL,
-                                                              context.expr.value);
+            newContext.expr = context.cgHelper.ConvertType(*context.IRBuilder,
+                                                           newContext.type,
+                                                           FundType::BOOL,
+                                                           newContext.expr.value);
         }
 
-        context.IRBuilder->CreateCondBr(context.expr.value, loopBB, endBB);
+        context.IRBuilder->CreateCondBr(newContext.expr.value, loopBB, endBB);
     }
     else {
         context.IRBuilder->CreateBr(loopBB);
@@ -346,7 +350,8 @@ void ForStatement::Codegen(CodegenContext &context) const
 
     stmt->Codegen(newContext);
 
-    context.IRBuilder->CreateBr(iterBB);
+    if (!context.IRBuilder->GetInsertBlock()->getTerminator())
+        context.IRBuilder->CreateBr(iterBB);
     function->getBasicBlockList().push_back(endBB);
     context.IRBuilder->SetInsertPoint(endBB);
 
@@ -362,13 +367,15 @@ void JumpStatement::Codegen(CodegenContext &context) const
             throw SemanticError("break statement not in loop or switch statement",
                                 srcLocation);
 
-        context.IRBuilder->CreateBr(context.stmt.breakBB);
+        if (!context.IRBuilder->GetInsertBlock()->getTerminator())
+            context.IRBuilder->CreateBr(context.stmt.breakBB);
         break;
     case CONTINUE:
         if (!context.stmt.isInLoop)
             throw SemanticError("continue statement not in loop", srcLocation);
 
-        context.IRBuilder->CreateBr(context.stmt.continueBB);
+        if (!context.IRBuilder->GetInsertBlock()->getTerminator())
+            context.IRBuilder->CreateBr(context.stmt.continueBB);
         break;
     default:
         Type &retType = context.symtab->GetCurrentFunction()->retType;
@@ -387,14 +394,14 @@ void JumpStatement::Codegen(CodegenContext &context) const
                                     srcLocation);
 
             if (context.expr.isConstant) {
-                context.expr.value =
-                    context.cgHelper.CreateConstant(context.type, context.expr.constant);
+                context.expr =
+                    context.cgHelper.CreateConstant(retType, context.expr.constant);
             }
             else {
-                context.expr.value = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                                  context.type,
-                                                                  retType,
-                                                                  context.expr.value);
+                context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
+                                                            context.type,
+                                                            retType,
+                                                            context.expr.value);
             }
             context.IRBuilder->CreateRet(context.expr.value);
         }
