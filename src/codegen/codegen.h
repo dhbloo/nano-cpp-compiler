@@ -12,23 +12,22 @@ struct ExprState;
 class CodeGenHelper
 {
 public:
-    CodeGenHelper(llvm::LLVMContext &llvmContext, llvm::Module &module);
+    CodeGenHelper(llvm::LLVMContext &llvmContext,
+                  llvm::Module &     module,
+                  llvm::IRBuilder<> &IRBuilder);
 
     llvm::Constant *CreateConstant(const ::Type &t, ::Constant constant);
     llvm::Constant *CreateStringConstant(std::string string);
     llvm::Constant *CreateZeroConstant(const ::Type &t = FundType::INT);
 
     llvm::Type * MakeType(const ::Type &t);
-    llvm::Value *ConvertType(llvm::IRBuilder<> &IRBuilder,
-                             ::Type             fromT,
-                             const ::Type &     toT,
-                             llvm::Value *      fromV);
+    llvm::Value *ConvertType(::Type fromT, const ::Type &toT, llvm::Value *fromV);
+    llvm::Value *
+    CreateValue(const ::Type &fromT, const ::Type &toT, const ExprState &expr);
 
-    void GenZeroInit(llvm::IRBuilder<> &IRBuilder, SymbolSet varSymbol);
-    void GenAssignInit(llvm::IRBuilder<> &IRBuilder,
-                       SymbolSet          varSymbol,
-                       const ::Type &     exprType,
-                       const ExprState &  expr);
+    void GenZeroInit(SymbolSet varSymbol);
+    void
+    GenAssignInit(SymbolSet varSymbol, const ::Type &exprType, const ExprState &expr);
 
 private:
     llvm::Constant *CreateFundTypeConstant(FundType fundType, ::Constant constant);
@@ -36,12 +35,10 @@ private:
     llvm::Type * MakeFundType(FundType ft);
     llvm::Type * MakeClass(const ClassDescriptor *classDesc);
     llvm::Type * MakeFunction(const FunctionDescriptor *funcDesc);
-    llvm::Value *ConvertFundType(llvm::IRBuilder<> &IRBuilder,
-                                 FundType           fromT,
-                                 FundType           toT,
-                                 llvm::Value *      fromV);
+    llvm::Value *ConvertFundType(FundType fromT, FundType toT, llvm::Value *fromV);
 
     llvm::LLVMContext &                                             ctx;
     llvm::Module &                                                  module;
+    llvm::IRBuilder<> &                                             Builder;
     std::unordered_map<const ClassDescriptor *, llvm::StructType *> structTypeMap;
 };

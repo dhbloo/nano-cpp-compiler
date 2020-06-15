@@ -34,17 +34,10 @@ void AssignmentExpression::Codegen(CodegenContext &context) const
                                 + "'",
                             srcLocation);
 
-    if (context.expr.isConstant) {
-        context.expr = context.cgHelper.CreateConstant(lValueType, context.expr.constant);
-    }
-
-    context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                context.type,
-                                                lValueType,
-                                                context.expr.value);
-    context.IRBuilder->CreateAlignedStore(context.expr.value,
-                                          lValue,
-                                          llvm::Align(lValueType.Alignment()));
+    context.expr = context.cgHelper.CreateValue(context.type, lValueType, context.expr);
+    context.IRBuilder.CreateAlignedStore(context.expr.value,
+                                         lValue,
+                                         llvm::Align(lValueType.Alignment()));
     context.type      = leftType;
     context.symbolSet = varSymbol;
     context.expr      = lValue;
@@ -112,19 +105,18 @@ void BinaryExpression::Codegen(CodegenContext &context) const
     case BinaryOp::SUBSCRIPT:
         // TODO: operator[]
         assert(!context.expr.isConstant);
-        leftType = leftType.Decay();
-        if (!leftType.IsPtr())
+        leftType = leftType.RemoveRef();
+        if (!leftType.IsPtr() && !leftType.IsArray())
             throw SemanticError("subscripted value is not array or pointer", srcLocation);
 
-        context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                    context.type,
-                                                    leftType,
-                                                    context.expr.value);
+        context.expr =
+            context.cgHelper.ConvertType(context.type, leftType, context.expr.value);
         break;
 
     case BinaryOp::DOT:
     case BinaryOp::DOTSTAR:
         assert(!context.expr.isConstant);
+
         if (leftType.IsPtr() && leftType.RemovePtr().IsSimple(TypeKind::CLASS))
             throw SemanticError("member reference type '" + leftType.Name()
                                     + "' is a pointer; note: use '->' instead",
@@ -153,18 +145,14 @@ void BinaryExpression::Codegen(CodegenContext &context) const
                                         + "' is not a pointer",
                                     srcLocation);
         }
-
-        if (!leftType.RemovePtr().IsSimple(TypeKind::CLASS))
+        else if (!leftType.RemovePtr().IsSimple(TypeKind::CLASS))
             throw SemanticError("member reference base type '" + leftType.Name()
                                     + "' is not a class or struct",
                                 srcLocation);
 
-        context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                    context.type,
-                                                    leftType,
-                                                    context.expr.value);
-        context.type =
-            context.type.RemovePtr().AddPtrDesc(Type::PtrDescriptor {PtrType::REF});
+        context.expr =
+            context.cgHelper.ConvertType(context.type, leftType, context.expr.value);
+        leftType = leftType.RemovePtr().AddPtrDesc(Type::PtrDescriptor {PtrType::REF});
         rightCtx.symtab = leftType.Class()->memberTable.get();
         break;
 
@@ -184,27 +172,26 @@ void BinaryExpression::Codegen(CodegenContext &context) const
             }
         }
         else {
-            context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                        context.type,
+            context.expr = context.cgHelper.ConvertType(context.type,
                                                         FundType::BOOL,
                                                         context.expr.value);
 
-            leftCondBB    = context.IRBuilder->GetInsertBlock();
-            auto function = context.IRBuilder->GetInsertBlock()->getParent();
+            leftCondBB    = context.IRBuilder.GetInsertBlock();
+            auto function = leftCondBB->getParent();
 
             if (op == BinaryOp::LOGIAND) {
                 rightCondBB =
                     llvm::BasicBlock::Create(context.llvmContext, "and.rhs", function);
                 endBB = llvm::BasicBlock::Create(context.llvmContext, "and.end");
-                context.IRBuilder->CreateCondBr(context.expr.value, rightCondBB, endBB);
-                context.IRBuilder->SetInsertPoint(rightCondBB);
+                context.IRBuilder.CreateCondBr(context.expr.value, rightCondBB, endBB);
+                context.IRBuilder.SetInsertPoint(rightCondBB);
             }
             else {
                 rightCondBB =
                     llvm::BasicBlock::Create(context.llvmContext, "or.rhs", function);
                 endBB = llvm::BasicBlock::Create(context.llvmContext, "or.end");
-                context.IRBuilder->CreateCondBr(context.expr.value, endBB, rightCondBB);
-                context.IRBuilder->SetInsertPoint(rightCondBB);
+                context.IRBuilder.CreateCondBr(context.expr.value, endBB, rightCondBB);
+                context.IRBuilder.SetInsertPoint(rightCondBB);
             }
         }
         context.type = {FundType::BOOL};
@@ -216,10 +203,8 @@ void BinaryExpression::Codegen(CodegenContext &context) const
 
         leftType = leftType.Decay();
         if (!context.expr.isConstant) {
-            context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                        context.type,
-                                                        leftType,
-                                                        context.expr.value);
+            context.expr =
+                context.cgHelper.ConvertType(context.type, leftType, context.expr.value);
         }
         break;
     }
@@ -236,20 +221,25 @@ void BinaryExpression::Codegen(CodegenContext &context) const
                 context.cgHelper.CreateConstant(FundType::INT, rightCtx.expr.constant);
         }
         else {
-            rightCtx.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                         rightCtx.type,
+            rightCtx.expr = context.cgHelper.ConvertType(rightCtx.type,
                                                          FundType::INT,
                                                          rightCtx.expr.value);
         }
 
-        std::array<llvm::Value *, 2> idx;
-        idx[0] = context.cgHelper.CreateZeroConstant();
-        idx[1] = rightCtx.expr.value;
+        if (leftType.IsArray()) {
+            std::array<llvm::Value *, 2> idx;
+            idx[0] = context.cgHelper.CreateZeroConstant();
+            idx[1] = rightCtx.expr.value;
 
-        context.expr =
-            context.IRBuilder->CreateGEP(context.expr.value, rightCtx.expr.value);
+            context.expr = context.IRBuilder.CreateGEP(context.expr.value, idx);
+        }
+        else {
+            context.expr =
+                context.IRBuilder.CreateGEP(context.expr.value, rightCtx.expr.value);
+        }
+
         context.type =
-            leftType.RemovePtr().AddPtrDesc(Type::PtrDescriptor {PtrType::REF});
+            leftType.ElementType().AddPtrDesc(Type::PtrDescriptor {PtrType::REF});
         break;
     }
 
@@ -262,18 +252,13 @@ void BinaryExpression::Codegen(CodegenContext &context) const
         assert(!rightCtx.expr.isConstant);
         assert(rightCtx.symbolSet);
 
-        std::array<llvm::Value *, 2> idx;
-        idx[0] = context.cgHelper.CreateZeroConstant();
-        idx[1] = context.cgHelper.CreateConstant(FundType::INT,
-                                                 ::Constant {rightCtx.symbolSet->index});
-
-        context.expr = context.IRBuilder->CreateGEP(context.expr.value, idx);
+        context.expr = context.IRBuilder.CreateStructGEP(context.expr.value,
+                                                         rightCtx.symbolSet->index);
 
         // If object is r-value, then its member is set to r-value
         if (!leftType.IsRef() && rightCtx.type.IsRef()) {
             context.type  = rightCtx.type.RemoveRef();
-            rightCtx.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                         rightCtx.type,
+            rightCtx.expr = context.cgHelper.ConvertType(rightCtx.type,
                                                          context.type,
                                                          context.expr.value);
         }
@@ -313,20 +298,18 @@ void BinaryExpression::Codegen(CodegenContext &context) const
                 context.expr.constant.boolVal |= rightCtx.expr.constant.boolVal;
         }
         else {
-            rightCtx.expr = rightCtx.cgHelper.ConvertType(*context.IRBuilder,
-                                                          rightCtx.type,
+            rightCtx.expr = rightCtx.cgHelper.ConvertType(rightCtx.type,
                                                           FundType::BOOL,
                                                           rightCtx.expr.value);
 
-            auto function = context.IRBuilder->GetInsertBlock()->getParent();
+            auto function = context.IRBuilder.GetInsertBlock()->getParent();
             function->getBasicBlockList().push_back(endBB);
-            if (!context.IRBuilder->GetInsertBlock()->getTerminator())
-                context.IRBuilder->CreateBr(endBB);
-            context.IRBuilder->SetInsertPoint(endBB);
+            if (!context.IRBuilder.GetInsertBlock()->getTerminator())
+                context.IRBuilder.CreateBr(endBB);
+            context.IRBuilder.SetInsertPoint(endBB);
 
             auto phiNode =
-                context.IRBuilder->CreatePHI(context.cgHelper.MakeType(FundType::BOOL),
-                                             2);
+                context.IRBuilder.CreatePHI(context.cgHelper.MakeType(FundType::BOOL), 2);
             phiNode->addIncoming(context.expr.value, leftCondBB);
             phiNode->addIncoming(rightCtx.expr.value, rightCondBB);
             context.expr = phiNode;
@@ -357,8 +340,7 @@ void BinaryExpression::Codegen(CodegenContext &context) const
         // Convert to arithmetic type
         auto rightType = rightCtx.type.Decay();
         if (!rightCtx.expr.isConstant) {
-            rightCtx.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                         rightCtx.type,
+            rightCtx.expr = context.cgHelper.ConvertType(rightCtx.type,
                                                          rightType,
                                                          rightCtx.expr.value);
         }
@@ -379,23 +361,10 @@ void BinaryExpression::Codegen(CodegenContext &context) const
                                                      rightCtx.expr.constant);
         }
         else {
-            if (context.expr.isConstant) {
-                context.expr =
-                    context.cgHelper.CreateConstant(commonType, context.expr.constant);
-            }
-            else if (rightCtx.expr.isConstant) {
-                rightCtx.expr =
-                    context.cgHelper.CreateConstant(commonType, rightCtx.expr.constant);
-            }
-
-            context.expr  = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                        leftType,
-                                                        commonType,
-                                                        context.expr.value);
-            rightCtx.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                         rightType,
-                                                         commonType,
-                                                         rightCtx.expr.value);
+            context.expr =
+                context.cgHelper.CreateValue(leftType, commonType, context.expr);
+            rightCtx.expr =
+                context.cgHelper.CreateValue(rightType, commonType, rightCtx.expr);
 
             bool isDecimal = commonType.fundType == FundType::FLOAT
                              || commonType.fundType == FundType::DOUBLE;
@@ -409,69 +378,69 @@ void BinaryExpression::Codegen(CodegenContext &context) const
 
                 switch (op) {
                 case BinaryOp::MUL:
-                    context.expr = context.IRBuilder->CreateMul(context.expr.value,
-                                                                rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateMul(context.expr.value,
+                                                               rightCtx.expr.value);
                     break;
                 case BinaryOp::DIV:
-                    context.expr = context.IRBuilder->CreateSDiv(context.expr.value,
-                                                                 rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateSDiv(context.expr.value,
+                                                                rightCtx.expr.value);
                     break;
                 case BinaryOp::MOD:
-                    context.expr = context.IRBuilder->CreateSRem(context.expr.value,
-                                                                 rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateSRem(context.expr.value,
+                                                                rightCtx.expr.value);
                     break;
                 case BinaryOp::ADD:
-                    context.expr = context.IRBuilder->CreateAdd(context.expr.value,
-                                                                rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateAdd(context.expr.value,
+                                                               rightCtx.expr.value);
                     break;
                 case BinaryOp::SUB:
-                    context.expr = context.IRBuilder->CreateSub(context.expr.value,
-                                                                rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateSub(context.expr.value,
+                                                               rightCtx.expr.value);
                     break;
                 case BinaryOp::SHL:
-                    context.expr = context.IRBuilder->CreateShl(context.expr.value,
-                                                                rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateShl(context.expr.value,
+                                                               rightCtx.expr.value);
                     break;
                 case BinaryOp::SHR:
-                    context.expr = context.IRBuilder->CreateAShr(context.expr.value,
-                                                                 rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateAShr(context.expr.value,
+                                                                rightCtx.expr.value);
                     break;
                 case BinaryOp::GT:
-                    context.expr = context.IRBuilder->CreateICmpSGT(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateICmpSGT(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 case BinaryOp::LT:
-                    context.expr = context.IRBuilder->CreateICmpSLT(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateICmpSLT(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 case BinaryOp::LE:
-                    context.expr = context.IRBuilder->CreateICmpSLE(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateICmpSLE(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 case BinaryOp::GE:
-                    context.expr = context.IRBuilder->CreateICmpSGE(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateICmpSGE(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 case BinaryOp::EQ:
-                    context.expr = context.IRBuilder->CreateICmpEQ(context.expr.value,
-                                                                   rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateICmpEQ(context.expr.value,
+                                                                  rightCtx.expr.value);
                     break;
                 case BinaryOp::NE:
-                    context.expr = context.IRBuilder->CreateICmpNE(context.expr.value,
-                                                                   rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateICmpNE(context.expr.value,
+                                                                  rightCtx.expr.value);
                     break;
                 case BinaryOp::XOR:
-                    context.expr = context.IRBuilder->CreateXor(context.expr.value,
-                                                                rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateXor(context.expr.value,
+                                                               rightCtx.expr.value);
                     break;
                 case BinaryOp::AND:
-                    context.expr = context.IRBuilder->CreateAnd(context.expr.value,
-                                                                rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateAnd(context.expr.value,
+                                                               rightCtx.expr.value);
                     break;
                 case BinaryOp::OR:
                 default:
-                    context.expr = context.IRBuilder->CreateOr(context.expr.value,
-                                                               rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateOr(context.expr.value,
+                                                              rightCtx.expr.value);
                     break;
                 }
                 break;
@@ -482,69 +451,69 @@ void BinaryExpression::Codegen(CodegenContext &context) const
             case FundType::ULONG:
                 switch (op) {
                 case BinaryOp::MUL:
-                    context.expr = context.IRBuilder->CreateMul(context.expr.value,
-                                                                rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateMul(context.expr.value,
+                                                               rightCtx.expr.value);
                     break;
                 case BinaryOp::DIV:
-                    context.expr = context.IRBuilder->CreateUDiv(context.expr.value,
-                                                                 rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateUDiv(context.expr.value,
+                                                                rightCtx.expr.value);
                     break;
                 case BinaryOp::MOD:
-                    context.expr = context.IRBuilder->CreateURem(context.expr.value,
-                                                                 rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateURem(context.expr.value,
+                                                                rightCtx.expr.value);
                     break;
                 case BinaryOp::ADD:
-                    context.expr = context.IRBuilder->CreateAdd(context.expr.value,
-                                                                rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateAdd(context.expr.value,
+                                                               rightCtx.expr.value);
                     break;
                 case BinaryOp::SUB:
-                    context.expr = context.IRBuilder->CreateSub(context.expr.value,
-                                                                rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateSub(context.expr.value,
+                                                               rightCtx.expr.value);
                     break;
                 case BinaryOp::SHL:
-                    context.expr = context.IRBuilder->CreateShl(context.expr.value,
-                                                                rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateShl(context.expr.value,
+                                                               rightCtx.expr.value);
                     break;
                 case BinaryOp::SHR:
-                    context.expr = context.IRBuilder->CreateLShr(context.expr.value,
-                                                                 rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateLShr(context.expr.value,
+                                                                rightCtx.expr.value);
                     break;
                 case BinaryOp::GT:
-                    context.expr = context.IRBuilder->CreateICmpUGT(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateICmpUGT(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 case BinaryOp::LT:
-                    context.expr = context.IRBuilder->CreateICmpULT(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateICmpULT(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 case BinaryOp::LE:
-                    context.expr = context.IRBuilder->CreateICmpULE(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateICmpULE(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 case BinaryOp::GE:
-                    context.expr = context.IRBuilder->CreateICmpUGE(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateICmpUGE(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 case BinaryOp::EQ:
-                    context.expr = context.IRBuilder->CreateICmpEQ(context.expr.value,
-                                                                   rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateICmpEQ(context.expr.value,
+                                                                  rightCtx.expr.value);
                     break;
                 case BinaryOp::NE:
-                    context.expr = context.IRBuilder->CreateICmpNE(context.expr.value,
-                                                                   rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateICmpNE(context.expr.value,
+                                                                  rightCtx.expr.value);
                     break;
                 case BinaryOp::XOR:
-                    context.expr = context.IRBuilder->CreateXor(context.expr.value,
-                                                                rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateXor(context.expr.value,
+                                                               rightCtx.expr.value);
                     break;
                 case BinaryOp::AND:
-                    context.expr = context.IRBuilder->CreateAnd(context.expr.value,
-                                                                rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateAnd(context.expr.value,
+                                                               rightCtx.expr.value);
                     break;
                 case BinaryOp::OR:
                 default:
-                    context.expr = context.IRBuilder->CreateOr(context.expr.value,
-                                                               rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateOr(context.expr.value,
+                                                              rightCtx.expr.value);
                     break;
                 }
                 break;
@@ -553,45 +522,45 @@ void BinaryExpression::Codegen(CodegenContext &context) const
             case FundType::DOUBLE:
                 switch (op) {
                 case BinaryOp::MUL:
-                    context.expr = context.IRBuilder->CreateFMul(context.expr.value,
-                                                                 rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateFMul(context.expr.value,
+                                                                rightCtx.expr.value);
                     break;
                 case BinaryOp::DIV:
-                    context.expr = context.IRBuilder->CreateFDiv(context.expr.value,
-                                                                 rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateFDiv(context.expr.value,
+                                                                rightCtx.expr.value);
                     break;
                 case BinaryOp::ADD:
-                    context.expr = context.IRBuilder->CreateFAdd(context.expr.value,
-                                                                 rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateFAdd(context.expr.value,
+                                                                rightCtx.expr.value);
                     break;
                 case BinaryOp::SUB:
-                    context.expr = context.IRBuilder->CreateFSub(context.expr.value,
-                                                                 rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateFSub(context.expr.value,
+                                                                rightCtx.expr.value);
                     break;
                 case BinaryOp::GT:
-                    context.expr = context.IRBuilder->CreateFCmpUGT(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateFCmpUGT(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 case BinaryOp::LT:
-                    context.expr = context.IRBuilder->CreateFCmpULT(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateFCmpULT(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 case BinaryOp::LE:
-                    context.expr = context.IRBuilder->CreateFCmpULE(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateFCmpULE(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 case BinaryOp::GE:
-                    context.expr = context.IRBuilder->CreateFCmpUGE(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateFCmpUGE(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 case BinaryOp::EQ:
-                    context.expr = context.IRBuilder->CreateFCmpUEQ(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateFCmpUEQ(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 case BinaryOp::NE:
                 default:
-                    context.expr = context.IRBuilder->CreateFCmpUNE(context.expr.value,
-                                                                    rightCtx.expr.value);
+                    context.expr = context.IRBuilder.CreateFCmpUNE(context.expr.value,
+                                                                   rightCtx.expr.value);
                     break;
                 }
                 break;
@@ -647,10 +616,8 @@ void UnaryExpression::Codegen(CodegenContext &context) const
                                 srcLocation);
 
         assert(!context.expr.isConstant);
-        context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                    exprType,
-                                                    context.type,
-                                                    context.expr.value);
+        context.expr =
+            context.cgHelper.ConvertType(exprType, context.type, context.expr.value);
         context.type =
             context.type.RemovePtr().AddPtrDesc(Type::PtrDescriptor {PtrType::REF});
         break;
@@ -668,7 +635,7 @@ void UnaryExpression::Codegen(CodegenContext &context) const
             assert(!context.expr.isConstant);
             context.type = exprType.RemoveRef();
             /*context.expr =
-                context.IRBuilder->CreateGEP(context.expr.value,
+                context.IRBuilder.CreateGEP(context.expr.value,
                                              context.cgHelper.CreateZeroConstant());*/
 
             assert(context.symbolSet);
@@ -698,10 +665,8 @@ void UnaryExpression::Codegen(CodegenContext &context) const
                                 srcLocation);
 
         assert(!context.expr.isConstant);
-        auto rvalue = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                   context.type,
-                                                   exprType,
-                                                   context.expr.value);
+        auto rvalue =
+            context.cgHelper.ConvertType(context.type, exprType, context.expr.value);
 
         if (exprType.IsSimple(TypeKind::FUNDTYPE)) {
             auto oneConstant =
@@ -711,16 +676,16 @@ void UnaryExpression::Codegen(CodegenContext &context) const
             case FundType::FLOAT:
             case FundType::DOUBLE:
                 if (op == UnaryOp::PREINC)
-                    rvalue = context.IRBuilder->CreateFAdd(rvalue, oneConstant);
+                    rvalue = context.IRBuilder.CreateFAdd(rvalue, oneConstant);
                 else
-                    rvalue = context.IRBuilder->CreateFSub(rvalue, oneConstant);
+                    rvalue = context.IRBuilder.CreateFSub(rvalue, oneConstant);
                 break;
 
             default:
                 if (op == UnaryOp::PREINC)
-                    rvalue = context.IRBuilder->CreateAdd(rvalue, oneConstant);
+                    rvalue = context.IRBuilder.CreateAdd(rvalue, oneConstant);
                 else
-                    rvalue = context.IRBuilder->CreateSub(rvalue, oneConstant);
+                    rvalue = context.IRBuilder.CreateSub(rvalue, oneConstant);
                 break;
             }
         }
@@ -739,7 +704,7 @@ void UnaryExpression::Codegen(CodegenContext &context) const
         }
         else if (exprType.IsPtr()) {
             auto oneOffset = context.cgHelper.CreateConstant(FundType::INT, Constant {1});
-            rvalue         = context.IRBuilder->CreateGEP(rvalue, oneOffset);
+            rvalue         = context.IRBuilder.CreateGEP(rvalue, oneOffset);
         }
         else {
             if (op == UnaryOp::PREINC)
@@ -752,9 +717,9 @@ void UnaryExpression::Codegen(CodegenContext &context) const
                                     srcLocation);
         }
 
-        context.IRBuilder->CreateAlignedStore(rvalue,
-                                              context.expr.value,
-                                              llvm::Align(exprType.Alignment()));
+        context.IRBuilder.CreateAlignedStore(rvalue,
+                                             context.expr.value,
+                                             llvm::Align(exprType.Alignment()));
         break;
     }
     case UnaryOp::POSTINC:
@@ -770,10 +735,8 @@ void UnaryExpression::Codegen(CodegenContext &context) const
                                 srcLocation);
 
         assert(!context.expr.isConstant);
-        auto rvalue = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                   context.type,
-                                                   exprType,
-                                                   context.expr.value);
+        auto rvalue =
+            context.cgHelper.ConvertType(context.type, exprType, context.expr.value);
 
         if (exprType.IsSimple(TypeKind::FUNDTYPE)) {
             auto oneConstant =
@@ -783,16 +746,16 @@ void UnaryExpression::Codegen(CodegenContext &context) const
             case FundType::FLOAT:
             case FundType::DOUBLE:
                 if (op == UnaryOp::POSTINC)
-                    rvalue = context.IRBuilder->CreateFAdd(rvalue, oneConstant);
+                    rvalue = context.IRBuilder.CreateFAdd(rvalue, oneConstant);
                 else
-                    rvalue = context.IRBuilder->CreateFSub(rvalue, oneConstant);
+                    rvalue = context.IRBuilder.CreateFSub(rvalue, oneConstant);
                 break;
 
             default:
                 if (op == UnaryOp::POSTINC)
-                    rvalue = context.IRBuilder->CreateAdd(rvalue, oneConstant);
+                    rvalue = context.IRBuilder.CreateAdd(rvalue, oneConstant);
                 else
-                    rvalue = context.IRBuilder->CreateSub(rvalue, oneConstant);
+                    rvalue = context.IRBuilder.CreateSub(rvalue, oneConstant);
                 break;
             }
         }
@@ -811,7 +774,7 @@ void UnaryExpression::Codegen(CodegenContext &context) const
         }
         else if (exprType.IsPtr()) {
             auto oneOffset = context.cgHelper.CreateConstant(FundType::INT, Constant {1});
-            rvalue         = context.IRBuilder->CreateGEP(rvalue, oneOffset);
+            rvalue         = context.IRBuilder.CreateGEP(rvalue, oneOffset);
         }
         else {
             if (op == UnaryOp::POSTINC)
@@ -824,9 +787,9 @@ void UnaryExpression::Codegen(CodegenContext &context) const
                                     srcLocation);
         }
 
-        context.IRBuilder->CreateAlignedStore(rvalue,
-                                              context.expr.value,
-                                              llvm::Align(exprType.Alignment()));
+        context.IRBuilder.CreateAlignedStore(rvalue,
+                                             context.expr.value,
+                                             llvm::Align(exprType.Alignment()));
         context.expr = rvalue;
         context.type = exprType;
         break;
@@ -840,10 +803,8 @@ void UnaryExpression::Codegen(CodegenContext &context) const
         exprType = exprType.Decay();
 
         if (!context.expr.isConstant) {
-            context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                        context.type,
-                                                        exprType,
-                                                        context.expr.value);
+            context.expr =
+                context.cgHelper.ConvertType(context.type, exprType, context.expr.value);
         }
 
         if (!exprType.IsConvertibleTo(FundType::BOOL, context.expr.constOrNull()))
@@ -856,11 +817,10 @@ void UnaryExpression::Codegen(CodegenContext &context) const
                 context.expr.constant.UnaryOpResult(FundType::BOOL, UnaryOp::LOGINOT);
         }
         else {
-            context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                        exprType,
+            context.expr = context.cgHelper.ConvertType(exprType,
                                                         FundType::BOOL,
                                                         context.expr.value);
-            context.expr = context.IRBuilder->CreateNot(context.expr.value);
+            context.expr = context.IRBuilder.CreateNot(context.expr.value);
         }
 
         context.type = {FundType::BOOL};
@@ -887,17 +847,15 @@ void UnaryExpression::Codegen(CodegenContext &context) const
                 context.expr.constant.UnaryOpResult(arithType.fundType, op);
         }
         else {
-            context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                        context.type,
-                                                        arithType,
-                                                        context.expr.value);
+            context.expr =
+                context.cgHelper.ConvertType(context.type, arithType, context.expr.value);
 
             switch (op) {
             case UnaryOp::NOT:
-                context.expr = context.IRBuilder->CreateNot(context.expr.value);
+                context.expr = context.IRBuilder.CreateNot(context.expr.value);
                 break;
             case UnaryOp::NEG:
-                context.expr = context.IRBuilder->CreateNeg(context.expr.value);
+                context.expr = context.IRBuilder.CreateNeg(context.expr.value);
                 break;
             default:
                 break;
@@ -1061,10 +1019,9 @@ void IdExpression::Codegen(CodegenContext &context) const
         else
             context.expr = context.symbolSet->value;
 
-        // Id expression is always a l-value (except for function, array and constant)
+        // Id expression is always a l-value (except for function and constant)
         if (!context.type.IsRef()) {
-            if (!context.type.IsSimple(TypeKind::FUNCTION) && !context.type.IsArray()
-                && !context.expr.isConstant) {
+            if (!context.expr.isConstant && !context.type.IsSimple(TypeKind::FUNCTION)) {
                 assert(context.symbolSet.size() == 1);
                 context.type.AddPtrDesc(Type::PtrDescriptor {PtrType::REF});
             }
@@ -1077,7 +1034,7 @@ void IdExpression::Codegen(CodegenContext &context) const
             else {
                 assert(context.symbolSet.size() == 1);
                 // Load reference
-                context.expr = context.IRBuilder->CreateAlignedLoad(
+                context.expr = context.IRBuilder.CreateAlignedLoad(
                     context.expr.value,
                     llvm::Align(context.type.Alignment()),
                     context.symbolSet->id);
@@ -1186,20 +1143,13 @@ void ExpressionList::Codegen(CodegenContext &context) const
                                             + argSymbol->type.Name() + "'",
                                         srcLocation);
 
-                if (context.expr.isConstant) {
-                    context.expr = context.cgHelper.CreateConstant(argSymbol->type,
-                                                                   context.expr.constant);
-                }
-                else {
-                    context.expr = context.cgHelper.ConvertType(*context.IRBuilder,
-                                                                context.type,
-                                                                argSymbol->type,
-                                                                context.expr.value);
-                }
+                context.expr = context.cgHelper.CreateValue(context.type,
+                                                            argSymbol->type,
+                                                            context.expr);
                 argValues.push_back(context.expr.value);
             }
 
-            context.expr = context.IRBuilder->CreateCall(function, argValues);
+            context.expr = context.IRBuilder.CreateCall(function, argValues);
             context.type = funcDesc->retType;
         }
         else if (context.type.IsSimple(TypeKind::CLASS)) {
@@ -1217,10 +1167,7 @@ void ExpressionList::Codegen(CodegenContext &context) const
                                         + context.type.Name() + "'",
                                     srcLocation);
 
-            context.cgHelper.GenAssignInit(*context.IRBuilder,
-                                           context.symbolSet,
-                                           varType,
-                                           context.expr);
+            context.cgHelper.GenAssignInit(context.symbolSet, varType, context.expr);
         }
     }
     else {

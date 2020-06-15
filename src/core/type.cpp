@@ -257,7 +257,13 @@ int Type::Size() const
 
 int Type::Alignment() const
 {
-    int size = Size();
+    Type t = *this;
+    while (t.IsArray()) {
+        t = t.ElementType();
+    }
+
+    int size = t.Size();
+
     if (size >= 8)
         return 8;
     else if (size >= 4)
@@ -297,11 +303,12 @@ bool Type::IsConvertibleTo(const Type &target, Constant *constant) const
         t = t.RemoveRef();
         if (!t.Function()->IsNonStaticMember())
             t.AddPtrDesc(PtrDescriptor {PtrType::PTR});
-        else
+        else {
             // member function to member pointer
             t.AddPtrDesc(PtrDescriptor {PtrType::CLASSPTR,
                                         CVQualifier::NONE,
                                         t.Function()->funcScope->GetCurrentClass()});
+        }
     }
     // O. r-value to const l-value (creates temporary)
     else if (!t.IsRef() && target.IsRef() && target.cv == CVQualifier::CONST
@@ -361,7 +368,18 @@ bool Type::IsConvertibleTo(const Type &target, Constant *constant) const
                  && target.RemovePtr().IsSimple(TypeKind::CLASS)) {
             return target.Class()->IsBaseOf(*t.Class());
         }
-        // TODO: member pointer conversion
+    }
+    // 9. member pointer conversion
+    else if (target.IsMemberPtr()) {
+        // literal '0' to pointer
+        if (t.IsSimple(TypeKind::FUNDTYPE) && t.fundType == FundType::INT) {
+            return constant && constant->intVal == 0;
+        }
+        // base member pointer to derived class member pointer
+        else if (t.IsMemberPtr() && t.RemoveMemberPtr().IsSimple(TypeKind::CLASS)
+                 && target.RemoveMemberPtr().IsSimple(TypeKind::CLASS)) {
+            return t.Class()->IsBaseOf(*target.Class());
+        }
     }
     // 10. bool conversion: pointer to bool
     else if (t.IsPtr() && target.IsSimple(TypeKind::FUNDTYPE)
@@ -617,11 +635,12 @@ Type Type::Decay() const
         t = t.RemoveRef();
         if (!t.Function()->IsNonStaticMember())
             t.AddPtrDesc(PtrDescriptor {PtrType::PTR});
-        else
+        else {
             // member function to member pointer
             t.AddPtrDesc(PtrDescriptor {PtrType::CLASSPTR,
                                         CVQualifier::NONE,
                                         t.Function()->funcScope->GetCurrentClass()});
+        }
     }
 
     return t;
@@ -670,6 +689,14 @@ Type Type::RemovePtr() const
 {
     Type t = *this;
     if (t.IsPtr())
+        t.ptrDescList.pop_back();
+    return t;
+}
+
+Type Type::RemoveMemberPtr() const
+{
+    Type t = *this;
+    if (t.IsMemberPtr())
         t.ptrDescList.pop_back();
     return t;
 }

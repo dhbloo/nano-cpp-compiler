@@ -7,6 +7,7 @@ int main(int argc, char *argv[])
 {
     bool debug = false;
     bool table = false, fullTable = false;
+    bool optimize = false;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-d") == 0)
             debug = true;
@@ -14,6 +15,8 @@ int main(int argc, char *argv[])
             table = true;
         else if (strcmp(argv[i], "-ft") == 0)
             fullTable = table = true;
+        else if (strcmp(argv[i], "-o") == 0)
+            optimize = true;
     }
 
     for (;;) {
@@ -22,6 +25,9 @@ int main(int argc, char *argv[])
         if (driver.Parse(debug, fullTable)) {
             if (table)
                 driver.PrintSymbolTable(std::cout);
+
+            if (optimize)
+                driver.Optimize();
 
             driver.PrintIR();
         }

@@ -7,9 +7,12 @@
 
 using namespace llvm;
 
-CodeGenHelper::CodeGenHelper(LLVMContext &llvmContext, llvm::Module &module)
+CodeGenHelper::CodeGenHelper(LLVMContext &llvmContext,
+                             Module &     module,
+                             IRBuilder<> &Builder)
     : ctx(llvmContext)
     , module(module)
+    , Builder(Builder)
 {}
 
 llvm::Constant *CodeGenHelper::CreateConstant(const ::Type &t, ::Constant constant)
@@ -26,8 +29,19 @@ llvm::Constant *CodeGenHelper::CreateConstant(const ::Type &t, ::Constant consta
             return ConstantPointerNull::get(pointerT);
         }
         else {
-            assert(constant.intVal == 0);
-            return nullptr;
+            auto constAddr = CreateFundTypeConstant(FundType::LONG, constant);
+            return ConstantExpr::getIntToPtr(constAddr, MakeType(t));
+        }
+    }
+    else if (t.IsMemberPtr()) {
+        throw SemanticError("34 unimp", yy::location());
+        if (constant.intVal == 0) {
+            auto pointerT = PointerType::get(MakeType(t.ElementType()), 0);
+            return ConstantPointerNull::get(pointerT);
+        }
+        else {
+            auto constAddr = CreateFundTypeConstant(FundType::LONG, constant);
+            return ConstantExpr::getIntToPtr(constAddr, MakeType(t));
         }
     }
     else {
@@ -79,7 +93,7 @@ llvm::Type *CodeGenHelper::MakeType(const ::Type &t)
     }
     else if (t.IsMemberPtr()) {
         // TODO
-        assert(false);
+        throw SemanticError("93 unimp", yy::location());
         return nullptr;
     }
     else if (t.IsArray()) {
@@ -91,10 +105,8 @@ llvm::Type *CodeGenHelper::MakeType(const ::Type &t)
     }
 }
 
-llvm::Value *CodeGenHelper::ConvertType(llvm::IRBuilder<> &IRBuilder,
-                                        ::Type             fromT,
-                                        const ::Type &     toT,
-                                        llvm::Value *      fromV)
+llvm::Value *
+CodeGenHelper::ConvertType(::Type fromT, const ::Type &toT, llvm::Value *fromV)
 {
     llvm::Value *toV = fromV;
 
@@ -107,7 +119,7 @@ llvm::Value *CodeGenHelper::ConvertType(llvm::IRBuilder<> &IRBuilder,
         && !fromT.RemoveRef().IsArray()) {
         // Load variable (non function)
         fromT = fromT.RemoveRef();
-        toV   = IRBuilder.CreateAlignedLoad(toV, llvm::Align(fromT.Alignment()));
+        toV   = Builder.CreateAlignedLoad(toV, llvm::Align(fromT.Alignment()));
 
         // remove cv for non class type
         if (!fromT.IsSimple(TypeKind::CLASS))
@@ -121,7 +133,7 @@ llvm::Value *CodeGenHelper::ConvertType(llvm::IRBuilder<> &IRBuilder,
         std::array<Value *, 2> idx;
         idx[0] = CreateZeroConstant();
         idx[1] = CreateZeroConstant();
-        toV    = IRBuilder.CreateInBoundsGEP(fromV, idx);
+        toV    = Builder.CreateInBoundsGEP(fromV, idx);
     }
     // 3. function (reference) to pointer / member pointer
     else if (fromT.RemoveRef().IsSimple(TypeKind::FUNCTION) && toT.IsPtr()
@@ -129,20 +141,21 @@ llvm::Value *CodeGenHelper::ConvertType(llvm::IRBuilder<> &IRBuilder,
         fromT = fromT.RemoveRef();
         if (!fromT.Function()->IsNonStaticMember())
             fromT.AddPtrDesc(::Type::PtrDescriptor {PtrType::PTR});
-        else
+        else {
             // member function to member pointer
             fromT.AddPtrDesc(
                 ::Type::PtrDescriptor {PtrType::CLASSPTR,
                                        CVQualifier::NONE,
                                        fromT.Function()->funcScope->GetCurrentClass()});
+        }
     }
     // O. r-value to const l-value (creates temporary)
     else if (!fromT.IsRef() && toT.IsRef() && toT.cv == CVQualifier::CONST
              && !fromT.IsSimple(TypeKind::FUNCTION)) {
-        auto tempVar = IRBuilder.CreateAlloca(MakeType(fromT), nullptr);
+        auto tempVar = Builder.CreateAlloca(MakeType(fromT), nullptr);
         tempVar->setAlignment(llvm::Align(fromT.Alignment()));
 
-        IRBuilder.CreateAlignedStore(toV, tempVar, llvm::Align(fromT.Alignment()));
+        Builder.CreateAlignedStore(toV, tempVar, llvm::Align(fromT.Alignment()));
         toV = tempVar;
 
         fromT.AddPtrDesc(::Type::PtrDescriptor {PtrType::REF});
@@ -159,47 +172,73 @@ llvm::Value *CodeGenHelper::ConvertType(llvm::IRBuilder<> &IRBuilder,
 
     // 4~8, 10. numeric conversion & bool conversion
     if (fromT.IsSimple(TypeKind::FUNDTYPE) && toT.IsSimple(TypeKind::FUNDTYPE)) {
-        toV = ConvertFundType(IRBuilder, fromT.fundType, toT.fundType, toV);
+        toV = ConvertFundType(fromT.fundType, toT.fundType, toV);
     }
     // 4, 10. integer promotion: enum to int (to float) & bool conversion: enum to bool
     else if (fromT.IsSimple(TypeKind::ENUM) && toT.IsSimple(TypeKind::FUNDTYPE)) {
-        toV = ConvertFundType(IRBuilder, FundType::INT, toT.fundType, toV);
+        toV = ConvertFundType(FundType::INT, toT.fundType, toV);
     }
     // 9. pointer conversion
     else if (toT.IsPtr()) {
-        if (isa<ConstantInt>(toV) && cast<ConstantInt>(toV)->getValue().isNullValue()) {
+        if (fromT.IsSimple(TypeKind::FUNDTYPE) && fromT.fundType == FundType::INT
+            && isa<ConstantInt>(toV)
+            && cast<ConstantInt>(toV)->getValue().isNullValue()) {
             toV = CreateConstant(toT, ::Constant {});
         }
         // object pointer to void pointer
         else if (fromT.IsPtr() && toT.RemovePtr().IsSimple(TypeKind::FUNDTYPE)
                  && toT.fundType == FundType::VOID) {
-            toV = IRBuilder.CreatePointerCast(toV, MakeType(toT));
+            toV = Builder.CreatePointerCast(toV, MakeType(toT));
         }
         // pointer to derived class to pointer to base class
         else if (fromT.IsPtr() && fromT.RemovePtr().IsSimple(TypeKind::CLASS)
                  && toT.RemovePtr().IsSimple(TypeKind::CLASS)) {
-            toV = IRBuilder.CreatePointerCast(toV, MakeType(toT));
+            toV = Builder.CreatePointerCast(toV, MakeType(toT));
         }
-        // TODO: member pointer conversion
-        else {
-            throw SemanticError("171 unimplemented", yy::location());
+    }
+    // 9. member pointer conversion
+    else if (toT.IsMemberPtr()) {
+        // literal '0' to pointer
+        if (fromT.IsSimple(TypeKind::FUNDTYPE) && fromT.fundType == FundType::INT
+            && isa<ConstantInt>(toV)
+            && cast<ConstantInt>(toV)->getValue().isNullValue()) {
+            toV = CreateConstant(toT, ::Constant {});
+        }
+        // base member pointer to derived class member pointer
+        else if (fromT.IsMemberPtr() && fromT.RemoveMemberPtr().IsSimple(TypeKind::CLASS)
+                 && toT.RemoveMemberPtr().IsSimple(TypeKind::CLASS)) {
+            toV = Builder.CreatePointerCast(toV, MakeType(toT));
         }
     }
     // 10. bool conversion: pointer to bool
     else if (fromT.IsPtr() && toT.IsSimple(TypeKind::FUNDTYPE)
              && toT.fundType == FundType::BOOL) {
-        toV = IRBuilder.CreatePtrToInt(toV, MakeType(FundType::BOOL));
+        toV = Builder.CreatePtrToInt(toV, MakeType(FundType::BOOL));
     }
 
     return toV;
 }
 
-void CodeGenHelper::GenZeroInit(IRBuilder<> &IRBuilder, SymbolSet varSymbol)
+llvm::Value *
+CodeGenHelper::CreateValue(const ::Type &fromT, const ::Type &toT, const ExprState &expr)
+{
+    if (expr.isConstant) {
+        return CreateConstant(toT,
+                              fromT == toT
+                                  ? expr.constant
+                                  : expr.constant.Convert(fromT.fundType, toT.fundType));
+    }
+    else {
+        return ConvertType(fromT, toT, expr.value);
+    }
+}
+
+void CodeGenHelper::GenZeroInit(SymbolSet varSymbol)
 {
     if (varSymbol.Scope()->GetParent()) {
-        IRBuilder.CreateAlignedStore(CreateZeroConstant(varSymbol->type),
-                                     varSymbol->value,
-                                     Align(varSymbol->type.Alignment()));
+        Builder.CreateAlignedStore(CreateZeroConstant(varSymbol->type),
+                                   varSymbol->value,
+                                   Align(varSymbol->type.Alignment()));
     }
     else {
         auto globalVar = module.getGlobalVariable(varSymbol->id, true);
@@ -207,22 +246,20 @@ void CodeGenHelper::GenZeroInit(IRBuilder<> &IRBuilder, SymbolSet varSymbol)
     }
 }
 
-void CodeGenHelper::GenAssignInit(IRBuilder<> &    IRBuilder,
-                                  SymbolSet        varSymbol,
+void CodeGenHelper::GenAssignInit(SymbolSet        varSymbol,
                                   const ::Type &   exprType,
                                   const ExprState &expr)
 {
     if (varSymbol.Scope()->GetParent()) {
         if (expr.isConstant) {
-            IRBuilder.CreateAlignedStore(CreateConstant(varSymbol->type, expr.constant),
-                                         varSymbol->value,
-                                         Align(varSymbol->type.Alignment()));
+            Builder.CreateAlignedStore(CreateConstant(varSymbol->type, expr.constant),
+                                       varSymbol->value,
+                                       Align(varSymbol->type.Alignment()));
         }
         else {
-            IRBuilder.CreateAlignedStore(
-                ConvertType(IRBuilder, exprType, varSymbol->type, expr.value),
-                varSymbol->value,
-                Align(varSymbol->type.Alignment()));
+            Builder.CreateAlignedStore(ConvertType(exprType, varSymbol->type, expr.value),
+                                       varSymbol->value,
+                                       Align(varSymbol->type.Alignment()));
         }
     }
     else {
@@ -325,10 +362,7 @@ llvm::Type *CodeGenHelper::MakeFunction(const FunctionDescriptor *funcDesc)
     return FunctionType::get(resultT, paramsT, false);
 }
 
-Value *CodeGenHelper::ConvertFundType(IRBuilder<> &IRBuilder,
-                                      FundType     fromT,
-                                      FundType     toT,
-                                      Value *      fromV)
+Value *CodeGenHelper::ConvertFundType(FundType fromT, FundType toT, Value *fromV)
 {
     Value *toV = nullptr;
 
@@ -348,12 +382,12 @@ Value *CodeGenHelper::ConvertFundType(IRBuilder<> &IRBuilder,
         case FundType::USHORT:
         case FundType::UINT:
         case FundType::ULONG:
-            toV = IRBuilder.CreateZExt(fromV, MakeType(toT));
+            toV = Builder.CreateZExt(fromV, MakeType(toT));
             break;
 
         case FundType::FLOAT:
         case FundType::DOUBLE:
-            toV = IRBuilder.CreateSIToFP(fromV, MakeType(toT));
+            toV = Builder.CreateSIToFP(fromV, MakeType(toT));
             break;
 
         default:
@@ -368,7 +402,7 @@ Value *CodeGenHelper::ConvertFundType(IRBuilder<> &IRBuilder,
 
         switch (toT) {
         case FundType::BOOL:
-            toV = IRBuilder.CreateICmpNE(fromV, CreateZeroConstant(fromT));
+            toV = Builder.CreateICmpNE(fromV, CreateZeroConstant(fromT));
             break;
 
         case FundType::CHAR:
@@ -379,12 +413,12 @@ Value *CodeGenHelper::ConvertFundType(IRBuilder<> &IRBuilder,
         case FundType::USHORT:
         case FundType::UINT:
         case FundType::ULONG:
-            toV = IRBuilder.CreateSExtOrTrunc(fromV, MakeType(toT));
+            toV = Builder.CreateSExtOrTrunc(fromV, MakeType(toT));
             break;
 
         case FundType::FLOAT:
         case FundType::DOUBLE:
-            toV = IRBuilder.CreateSIToFP(fromV, MakeType(toT));
+            toV = Builder.CreateSIToFP(fromV, MakeType(toT));
             break;
 
         default:
@@ -399,7 +433,7 @@ Value *CodeGenHelper::ConvertFundType(IRBuilder<> &IRBuilder,
 
         switch (toT) {
         case FundType::BOOL:
-            toV = IRBuilder.CreateICmpNE(fromV, CreateZeroConstant(fromT));
+            toV = Builder.CreateICmpNE(fromV, CreateZeroConstant(fromT));
             break;
 
         case FundType::CHAR:
@@ -411,12 +445,12 @@ Value *CodeGenHelper::ConvertFundType(IRBuilder<> &IRBuilder,
         case FundType::USHORT:
         case FundType::UINT:
         case FundType::ULONG:
-            toV = IRBuilder.CreateZExtOrTrunc(fromV, MakeType(toT));
+            toV = Builder.CreateZExtOrTrunc(fromV, MakeType(toT));
             break;
 
         case FundType::FLOAT:
         case FundType::DOUBLE:
-            toV = IRBuilder.CreateUIToFP(fromV, MakeType(toT));
+            toV = Builder.CreateUIToFP(fromV, MakeType(toT));
 
         default:
             break;
@@ -428,26 +462,26 @@ Value *CodeGenHelper::ConvertFundType(IRBuilder<> &IRBuilder,
 
         switch (toT) {
         case FundType::BOOL:
-            toV = IRBuilder.CreateFCmpUNE(fromV, CreateZeroConstant(fromT));
+            toV = Builder.CreateFCmpUNE(fromV, CreateZeroConstant(fromT));
             break;
 
         case FundType::CHAR:
         case FundType::SHORT:
         case FundType::INT:
         case FundType::LONG:
-            toV = IRBuilder.CreateFPToSI(fromV, MakeType(toT));
+            toV = Builder.CreateFPToSI(fromV, MakeType(toT));
             break;
 
         case FundType::UCHAR:
         case FundType::USHORT:
         case FundType::UINT:
         case FundType::ULONG:
-            toV = IRBuilder.CreateFPToUI(fromV, MakeType(toT));
+            toV = Builder.CreateFPToUI(fromV, MakeType(toT));
             break;
 
         case FundType::FLOAT:
         case FundType::DOUBLE:
-            toV = IRBuilder.CreateFPCast(fromV, MakeType(toT));
+            toV = Builder.CreateFPCast(fromV, MakeType(toT));
             break;
 
         default:

@@ -54,13 +54,16 @@ void BlockDeclaration::Codegen(CodegenContext &context) const
         try {
             d.declarator->Codegen(context);
 
+            if (context.decl.isTypedef)
+                goto next_declarator;
+
             SymbolSet             varSymbol = context.symbolSet;
             llvm::GlobalVariable *globalVar = nullptr;
             assert(varSymbol);
 
             if (context.symtab->GetParent()) {
                 // Local variables
-                auto localVar = context.IRBuilder->CreateAlloca(
+                auto localVar = context.IRBuilder.CreateAlloca(
                     context.cgHelper.MakeType(context.type),
                     nullptr,
                     varSymbol->id);
@@ -72,8 +75,8 @@ void BlockDeclaration::Codegen(CodegenContext &context) const
                 varSymbol->value = context.module.getOrInsertGlobal(
                     varSymbol->id,
                     context.cgHelper.MakeType(context.type));
-                globalVar = context.module.getGlobalVariable(varSymbol->id);
 
+                globalVar = context.module.getGlobalVariable(varSymbol->id);
                 globalVar->setConstant(context.type.IsConstInit());
                 globalVar->setAlignment(llvm::Align(context.type.Alignment()));
                 globalVar->setDSOLocal(true);
@@ -99,10 +102,10 @@ void BlockDeclaration::Codegen(CodegenContext &context) const
                 // Global variable are zero initialized by default
                 if (varSymbol->type.IsSimple(TypeKind::CLASS)) {
                     // TODO: find default constructor
-                    context.cgHelper.GenZeroInit(*context.IRBuilder, varSymbol);
+                    context.cgHelper.GenZeroInit(varSymbol);
                 }
                 else {
-                    context.cgHelper.GenZeroInit(*context.IRBuilder, varSymbol);
+                    context.cgHelper.GenZeroInit(varSymbol);
                 }
             }
         }

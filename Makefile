@@ -1,7 +1,7 @@
 CXX = g++ -std=c++14 -O0 -g
 
 LLVM_HEADER = -I`llvm-config --libdir`
-LLVM_LIB = `llvm-config --ldflags` `llvm-config --system-libs --libs core`
+LLVM_LIB = `llvm-config --ldflags` `llvm-config --system-libs --libs`
 
 HEADER = src/core/operator.h src/core/typeEnum.h src/core/symbol.h \
 		src/core/type.h src/core/constant.h \

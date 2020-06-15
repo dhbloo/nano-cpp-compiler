@@ -10,6 +10,7 @@ public:
     Driver(std::ostream &errorStream);
 
     bool Parse(bool isDebugMode = false, bool printLocalTable = false);
+    void Optimize();
     void PrintSymbolTable(std::ostream &os) const;
     void PrintIR() const;
 

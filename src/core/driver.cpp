@@ -31,7 +31,7 @@ bool Driver::Parse(bool isDebugMode, bool printLocalTable)
     llvmContext  = std::make_unique<llvm::LLVMContext>();
     module       = std::make_unique<llvm::Module>("NCC Module", *llvmContext);
     llvm::IRBuilder<> IRBuilder(*llvmContext);
-    CodeGenHelper     cgHelper(*llvmContext, *module);
+    CodeGenHelper     cgHelper(*llvmContext, *module, IRBuilder);
 
     CodegenContext context {errorStream,
                             std::cout,
@@ -39,7 +39,7 @@ bool Driver::Parse(bool isDebugMode, bool printLocalTable)
                             printLocalTable,
                             *llvmContext,
                             *module,
-                            &IRBuilder,
+                            IRBuilder,
                             cgHelper,
                             globalSymtab.get()};
     ast->Codegen(context);
@@ -50,6 +50,28 @@ bool Driver::Parse(bool isDebugMode, bool printLocalTable)
     }
 
     return true;
+}
+
+void Driver::Optimize()
+{
+    llvm::legacy::FunctionPassManager fpm(module.get());
+
+    // Promote allocas to registers.
+    fpm.add(llvm::createPromoteMemoryToRegisterPass());
+    // Do simple "peephole" optimizations and bit-twiddling optzns.
+    fpm.add(llvm::createInstructionCombiningPass());
+    // Reassociate expressions.
+    fpm.add(llvm::createReassociatePass());
+    // Eliminate Common SubExpressions.
+    fpm.add(llvm::createGVNPass());
+    // Simplify the control flow graph (deleting unreachable blocks, etc).
+    fpm.add(llvm::createCFGSimplificationPass());
+
+    fpm.doInitialization();
+    for (auto &function : module->functions()) {
+        fpm.run(function);
+    }
+    fpm.doFinalization();
 }
 
 void Driver::PrintSymbolTable(std::ostream &os) const

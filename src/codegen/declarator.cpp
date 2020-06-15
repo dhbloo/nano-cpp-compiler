@@ -350,9 +350,9 @@ void FunctionDefinition::Codegen(CodegenContext &context) const
     newContext.decl.state = DeclState::NODECL;
     newContext.symtab     = funcDesc->funcScope.get();
 
-    llvm::IRBuilder<> newIRBuilder(newContext.llvmContext);
-    newIRBuilder.SetInsertPoint(funcBB);
-    newContext.IRBuilder = &newIRBuilder;
+    // Save previous insertion point
+    auto previousIP = context.IRBuilder.saveAndClearIP();
+    context.IRBuilder.SetInsertPoint(funcBB);
 
     auto param = funcDesc->paramList.begin();
     auto arg   = function->arg_begin();
@@ -362,14 +362,15 @@ void FunctionDefinition::Codegen(CodegenContext &context) const
         if (param->symbol->id.empty())
             continue;
 
-        auto argVar =
-            newIRBuilder.CreateAlloca(context.cgHelper.MakeType(param->symbol->type),
-                                      nullptr,
-                                      param->symbol->id);
+        auto argVar = context.IRBuilder.CreateAlloca(
+            context.cgHelper.MakeType(param->symbol->type),
+            nullptr,
+            param->symbol->id);
         argVar->setAlignment(llvm::Align(param->symbol->type.Alignment()));
-        newIRBuilder.CreateAlignedStore(param->symbol->value,
-                                        argVar,
-                                        llvm::Align(param->symbol->type.Alignment()));
+        context.IRBuilder.CreateAlignedStore(
+            param->symbol->value,
+            argVar,
+            llvm::Align(param->symbol->type.Alignment()));
         param->symbol->value = argVar;
     }
 
@@ -379,6 +380,18 @@ void FunctionDefinition::Codegen(CodegenContext &context) const
 
     newContext.stmt = {true};
     funcBody->Codegen(newContext);
+
+    // Generate default return instruction
+    if (!context.IRBuilder.GetInsertBlock()->getTerminator()) {
+        if (funcDesc->retType == Type {FundType::VOID})
+            context.IRBuilder.CreateRetVoid();
+        else {
+            auto undefResult =
+                llvm::UndefValue::get(context.cgHelper.MakeType(funcDesc->retType));
+            context.IRBuilder.CreateRet(undefResult);
+        }
+    }
+    context.IRBuilder.restoreIP(previousIP);
 
     // Leave function scope
     funcDesc->hasBody = true;
@@ -401,7 +414,7 @@ void AssignmentInitializer::Codegen(CodegenContext &context) const
                                 + context.type.Name() + "'",
                             srcLocation);
 
-    context.cgHelper.GenAssignInit(*context.IRBuilder,
+    context.cgHelper.GenAssignInit(
                                    varSymbol,
                                    context.type,
                                    context.expr);
@@ -431,7 +444,7 @@ void ListInitializer::Codegen(CodegenContext &context) const
             throw SemanticError("excess elements in scalar initializer", srcLocation);
         }
         else if (initList.empty()) {
-            context.cgHelper.GenZeroInit(*context.IRBuilder, varSymbol);
+            context.cgHelper.GenZeroInit( varSymbol);
         }
         else {
             initList.front()->Codegen(context);
@@ -442,7 +455,7 @@ void ListInitializer::Codegen(CodegenContext &context) const
                                         + "' with '" + context.type.Name() + "'",
                                     srcLocation);
 
-            context.cgHelper.GenAssignInit(*context.IRBuilder,
+            context.cgHelper.GenAssignInit(
                                            varSymbol,
                                            context.type,
                                            context.expr);

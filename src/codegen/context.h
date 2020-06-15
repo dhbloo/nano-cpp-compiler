@@ -38,7 +38,7 @@ struct CodegenContext
 
     llvm::LLVMContext &llvmContext;
     llvm::Module &     module;
-    llvm::IRBuilder<> *IRBuilder;
+    llvm::IRBuilder<> &IRBuilder;
     CodeGenHelper &    cgHelper;
 
     SymbolTable *                    symtab;
@@ -53,13 +53,13 @@ struct CodegenContext
 
     struct
     {
-        bool               keepScope;
-        bool               isSwitchLevel;
-        bool               isInSwitch;
-        bool               isInLoop;
-        llvm::BasicBlock * breakBB;
-        llvm::BasicBlock * continueBB;
-        llvm::SwitchInst * switchInst;
+        bool              keepScope;
+        bool              isSwitchLevel;
+        bool              isInSwitch;
+        bool              isInLoop;
+        llvm::BasicBlock *breakBB;
+        llvm::BasicBlock *continueBB;
+        llvm::SwitchInst *switchInst;
     } stmt;
 
     struct

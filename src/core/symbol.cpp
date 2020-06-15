@@ -189,6 +189,12 @@ bool SymbolTable::AddTypedef(std::string aliasName, Type type)
         return false;
 
     typedefs.insert(std::make_pair(aliasName, type));
+
+    // Set anonymous class/enum name to its first typedef name
+    if (type.IsSimple(TypeKind::CLASS) && type.Class()->className[0] == '<')
+        type.Class()->className = aliasName;
+    else if (type.IsSimple(TypeKind::ENUM) && type.Enum()->enumName[0] == '<')
+        type.Enum()->enumName = aliasName;
     return true;
 }
 

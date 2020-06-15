@@ -113,6 +113,7 @@ struct Type
     Type RemoveCV() const;
     Type RemoveRef() const;
     Type RemovePtr() const;
+    Type RemoveMemberPtr() const;
 };
 
 struct ClassDescriptor : TypeDescriptor
