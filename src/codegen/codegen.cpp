@@ -332,25 +332,19 @@ llvm::Type *CodeGenHelper::MakeFundType(FundType ft)
     }
 }
 
-llvm::Type *CodeGenHelper::MakeClass(const ClassDescriptor *classDesc)
+llvm::StructType *CodeGenHelper::MakeClass(const ClassDescriptor *classDesc)
 {
     auto it = structTypeMap.find(classDesc);
     if (it != structTypeMap.end())
         return it->second;
 
-    std::vector<llvm::Type *> membersT;
-    auto                      sortedSymbols = classDesc->memberTable->SortedSymbols();
-
-    for (const auto &member : sortedSymbols) {
-        membersT.push_back(MakeType(member->type));
-    }
-
-    StructType *structType   = StructType::create(ctx, membersT, classDesc->FullName());
+    StructType *structType   = StructType::create(ctx, classDesc->FullName());
     structTypeMap[classDesc] = structType;
+
     return structType;
 }
 
-llvm::Type *CodeGenHelper::MakeFunction(const FunctionDescriptor *funcDesc)
+llvm::FunctionType *CodeGenHelper::MakeFunction(const FunctionDescriptor *funcDesc)
 {
     std::vector<llvm::Type *> paramsT;
 

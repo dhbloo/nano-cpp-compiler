@@ -149,7 +149,11 @@ void DeclSpecifier::Codegen(CodegenContext &context) const
     }
 }
 
-void TypeSpecifier::Codegen(CodegenContext &context) const {}
+void TypeSpecifier::Codegen(CodegenContext &context) const
+{
+    throw SemanticError("C++ requires a type specifier for all declarations",
+                        srcLocation);
+}
 
 void SimpleTypeSpecifier::Codegen(CodegenContext &context) const
 {

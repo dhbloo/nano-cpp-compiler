@@ -2,6 +2,7 @@ CXX = g++ -std=c++14 -O0 -g
 
 LLVM_HEADER = -I`llvm-config --libdir`
 LLVM_LIB = `llvm-config --ldflags` `llvm-config --system-libs --libs`
+LLVM_TG_INC = -I`llvm-config --includedir`
 
 HEADER = src/core/operator.h src/core/typeEnum.h src/core/symbol.h \
 		src/core/type.h src/core/constant.h \
@@ -9,6 +10,7 @@ HEADER = src/core/operator.h src/core/typeEnum.h src/core/symbol.h \
 CORE_SRC = driver symbol type constant
 AST_SRC = basic expression declaration class statement declarator
 CODEGEN_SRC = codegen
+TG_DIR = src/target/mips-r
 
 OBJ_DIR = bin
 OBJ = $(CORE_SRC:%=$(OBJ_DIR)/%.o) \
@@ -40,11 +42,14 @@ $(OBJ_DIR)/gen_%.o: src/codegen/%.cpp $(OBJ_DIR)/yyparser.o $(HEADER)
 $(OBJ_DIR)/cg_%.o: src/codegen/%.cpp $(HEADER) 
 	$(CXX) -c -o $@ $< $(LLVM_HEADER)
 
+$(TG_DIR)/mips.inc: $(TG_DIR)/Mips.td $(TG_DIR)/MipsRegisterInfo.td
+	llvm-tblgen -o $@ $< -I$(TG_DIR) $(LLVM_TG_INC) -print-enums -class=Register
+
 $(OBJ_DIR)/lextest.exe: $(YY) $(OBJ) src/lexer/lextest.cpp
 	$(CXX) -o $@ $^
 
 $(OBJ_DIR)/parsetest.exe: $(YY) $(OBJ) src/parser/parsetest.cpp
-	$(CXX) -o $@ $^
+	$(CXX) -o $@ $^ $(LLVM_LIB)
 
 $(OBJ_DIR)/ncc.exe: $(YY) $(OBJ) src/core/ncc.cpp
 	$(CXX) -o $@ $^ $(LLVM_LIB)
@@ -57,6 +62,9 @@ parsetest: $(OBJ_DIR)/parsetest.exe
 
 ncc: $(OBJ_DIR)/ncc.exe
 
+mips: $(TG_DIR)/mips.inc
+
 clean:
 	-rm $(OBJ_DIR)/*.o
 	-rm $(OBJ_DIR)/*.exe
+	-rm $(TG_DIR)/mips.inc

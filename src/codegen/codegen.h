@@ -20,8 +20,9 @@ public:
     llvm::Constant *CreateStringConstant(std::string string);
     llvm::Constant *CreateZeroConstant(const ::Type &t = FundType::INT);
 
-    llvm::Type * MakeType(const ::Type &t);
-    llvm::Value *ConvertType(::Type fromT, const ::Type &toT, llvm::Value *fromV);
+    llvm::Type *      MakeType(const ::Type &t);
+    llvm::StructType *MakeClass(const ClassDescriptor *classDesc);
+    llvm::Value *     ConvertType(::Type fromT, const ::Type &toT, llvm::Value *fromV);
     llvm::Value *
     CreateValue(const ::Type &fromT, const ::Type &toT, const ExprState &expr);
 
@@ -32,10 +33,9 @@ public:
 private:
     llvm::Constant *CreateFundTypeConstant(FundType fundType, ::Constant constant);
 
-    llvm::Type * MakeFundType(FundType ft);
-    llvm::Type * MakeClass(const ClassDescriptor *classDesc);
-    llvm::Type * MakeFunction(const FunctionDescriptor *funcDesc);
-    llvm::Value *ConvertFundType(FundType fromT, FundType toT, llvm::Value *fromV);
+    llvm::Type *        MakeFundType(FundType ft);
+    llvm::FunctionType *MakeFunction(const FunctionDescriptor *funcDesc);
+    llvm::Value *       ConvertFundType(FundType fromT, FundType toT, llvm::Value *fromV);
 
     llvm::LLVMContext &                                             ctx;
     llvm::Module &                                                  module;

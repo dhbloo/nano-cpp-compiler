@@ -5,6 +5,8 @@
 // int (int), (char);
 // int (*);
 
+const cc;
+
 int x, f(int a);
 int (Fuck(int))[10];
 int (Shit[10])(int);

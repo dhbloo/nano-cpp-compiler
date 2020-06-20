@@ -9,7 +9,13 @@
             "type": "cppdbg",
             "request": "launch",
             "program": "${workspaceFolder}/bin/ncc.exe",
-            "args": ["<${workspaceFolder}/testcases/simple/expr.cpp"],
+            "args": [
+                "<${workspaceFolder}/testcases/simple/expr.cpp", 
+                //"-t", 
+                //"-ir"
+                "-s",
+                "${workspaceFolder}/testcases/simple/expr.s"
+            ],
             "stopAtEntry": false,
             "cwd": "${workspaceFolder}",
             "environment": [],

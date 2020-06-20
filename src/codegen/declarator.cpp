@@ -467,8 +467,11 @@ void ParenthesisInitializer::Codegen(CodegenContext &context) const
 {
     assert(context.symbolSet.size() == 1);
     // TODO: find constructor function for class type
-    if (context.type.IsSimple(TypeKind::CLASS))
+    if (context.type.IsSimple(TypeKind::CLASS)) {
+        
         throw SemanticError("unimp", srcLocation);
+    }
+
     exprList->Codegen(context);
 }
 

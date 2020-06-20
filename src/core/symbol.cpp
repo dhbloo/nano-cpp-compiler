@@ -156,9 +156,16 @@ SymbolSet SymbolTable::AddSymbol(Symbol symbol)
         else if (alignment == 2)
             currentOffset = (currentOffset + 1) & ~1;
 
-        symbol.index  = currentIndex++;
-        symbol.offset = currentOffset;
-        currentOffset += symbol.type.Size();
+        // Only set index and offset for variable
+        if (symbol.type.IsSimple(TypeKind::FUNCTION)) {
+            symbol.index  = -1;
+            symbol.offset = -1;
+        }
+        else {
+            symbol.index  = currentIndex++;
+            symbol.offset = currentOffset;
+            currentOffset += symbol.type.Size();
+        }
     }
 
     auto it = symbols.insert(std::make_pair(symbol.id, symbol));
@@ -203,14 +210,14 @@ SymbolSet SymbolTable::QuerySymbol(std::string id, bool qualified)
     for (SymbolTable *p = this; p; p = p->parent) {
         auto range = p->symbols.equal_range(id);
         if (range.first != symbols.end())
-            return {range, this};
+            return {range, p};
 
         if (p->classDesc) {
             for (ClassDescriptor *pc = p->classDesc->baseClassDesc; pc;
                  pc                  = pc->baseClassDesc) {
                 range = pc->memberTable->symbols.equal_range(id);
                 if (range.first != symbols.end())
-                    return {range, this};
+                    return {range, pc->memberTable.get()};
             }
         }
 

@@ -1016,8 +1016,23 @@ void IdExpression::Codegen(CodegenContext &context) const
             context.expr.constant.intVal = context.symbolSet->intConstant;
             context.expr.isConstant      = true;
         }
-        else
+        else {
+            // For any non static symbol found in class, get its address by its index
+            // in class symbol table. Pointer to current class instance is the first
+            // function argument.
+
+            // auto classDesc = symtab->GetCurrentClass();
+            // if (classDesc && context.symbolSet->Attr() != Symbol::STATIC
+            //     && context.symbolSet.Scope() == classDesc->memberTable.get()) {
+            //     context.expr = context.IRBuilder.CreateStructGEP(
+            //         symtab->GetCurrentFunction()->paramList.front().symbol->value,
+            //         context.symbolSet->index,
+            //         context.symbolSet->id);
+            // }
+            // else {
             context.expr = context.symbolSet->value;
+            //}
+        }
 
         // Id expression is always a l-value (except for function and constant)
         if (!context.type.IsRef()) {

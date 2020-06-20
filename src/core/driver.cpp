@@ -3,6 +3,8 @@
 #include "../codegen/context.h"
 #include "../parser/yyparser.h"
 
+#include <sstream>
+
 Driver::Driver(std::ostream &errorStream) : errorStream(errorStream) {}
 
 bool Driver::Parse(bool isDebugMode, bool printLocalTable)
@@ -74,13 +76,71 @@ void Driver::Optimize()
     fpm.doFinalization();
 }
 
-void Driver::PrintSymbolTable(std::ostream &os) const
+std::string Driver::PrintSymbolTable() const
 {
+    std::stringstream ss;
     if (globalSymtab)
-        globalSymtab->Print(os);
+        globalSymtab->Print(ss);
+
+    return std::move(ss.str());
 }
 
-void Driver::PrintIR() const
+std::string Driver::PrintIR() const
 {
-    module->print(llvm::outs(), nullptr);
+    std::string              IR;
+    llvm::raw_string_ostream ss(IR);
+
+    module->print(ss, nullptr);
+
+    return std::move(IR);
+}
+
+bool Driver::EmitAssemblyCode(std::string filename) const
+{
+    auto targetTriple = "mips-unknown-linux-gnu";
+    // auto targetTriple = llvm::sys::getDefaultTargetTriple();
+
+    llvm::InitializeAllTargetInfos();
+    llvm::InitializeAllTargets();
+    llvm::InitializeAllTargetMCs();
+    llvm::InitializeAllAsmParsers();
+    llvm::InitializeAllAsmPrinters();
+
+    std::string error;
+    auto        target = llvm::TargetRegistry::lookupTarget(targetTriple, error);
+
+    if (!target) {
+        errorStream << "Target not found: " << error << '\n';
+        return false;
+    }
+
+    auto CPU      = "generic";
+    auto Features = "";
+
+    llvm::TargetOptions opt;
+    auto                RM = llvm::Optional<llvm::Reloc::Model>();
+    auto                targetMachine =
+        target->createTargetMachine(targetTriple, CPU, Features, opt, RM);
+
+    module->setDataLayout(targetMachine->createDataLayout());
+    module->setTargetTriple(targetTriple);
+
+    std::error_code      ec;
+    llvm::raw_fd_ostream dest(filename, ec, llvm::sys::fs::OF_Text);
+
+    if (ec) {
+        errorStream << "Could not open file: " << ec.message() << '\n';
+        return false;
+    }
+
+    llvm::legacy::PassManager pm;
+
+    if (targetMachine->addPassesToEmitFile(pm, dest, nullptr, llvm::CGFT_AssemblyFile)) {
+        errorStream << "Failed to add Emit File pass\n";
+        return false;
+    }
+
+    pm.run(*module);
+    dest.flush();
+    return true;
 }

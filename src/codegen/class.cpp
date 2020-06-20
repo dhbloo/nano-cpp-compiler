@@ -77,6 +77,19 @@ void MemberList::Codegen(CodegenContext &context) const
         }
     }
 
+    std::vector<llvm::Type *> membersT;
+    auto structType    = context.cgHelper.MakeClass(context.symtab->GetCurrentClass());
+    auto sortedSymbols = context.symtab->SortedSymbols();
+
+    // Build up LLVM struct type body
+    for (const auto &member : sortedSymbols) {
+        if (member->type.IsSimple(TypeKind::FUNCTION))
+            continue;
+
+        membersT.push_back(context.cgHelper.MakeType(member->type));
+    }
+    structType->setBody(membersT);
+
     // Second pass: member function definitions
     for (const auto &m : members) {
         if (!Is<MemberFunction>(*m))

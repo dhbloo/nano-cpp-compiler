@@ -183,6 +183,7 @@ std::string Type::Name(std::string innerName) const
             name = "(" + postfix + ")";
 
         name += "(";
+        // Hide first argument of non static member function
         size_t startIdx = Function()->IsNonStaticMember() ? 1 : 0;
         for (size_t i = startIdx; i < Function()->paramList.size(); i++) {
             if (i > startIdx)
