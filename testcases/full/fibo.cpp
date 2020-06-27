@@ -1,15 +1,16 @@
+void write(int x);
 
-long int fibo(long int x)
+int fibo(int x)
 {
-    if (x <= 1)
+    if (x <= 2)
         return 1;
     return fibo(x - 1) + fibo(x - 2);
 }
 
-long fib(long num)
+int fib(int num)
 {
-    long x = 0, y = 1, z = 0;
-    for (long int i = 0; i < num; i++) {
+    int x = 0, y = 1, z = 0;
+    for (int i = 0; i < num; i++) {
         z = x + y;
         x = y;
         y = z;
@@ -17,6 +18,9 @@ long fib(long num)
     return x;
 }
 
-int main() {
-    return fibo(10);
+int main()
+{
+    write(fibo(10));
+    write(fib(10));
+    return 0;
 }

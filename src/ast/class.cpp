@@ -132,16 +132,6 @@ void BaseSpecifier::Print(std::ostream &os, Indent indent) const
         nameSpec->Print(os, indent + 1);
 }
 
-void ConversionFunctionId::Print(std::ostream &os, Indent indent) const
-{
-    os << indent << "类型转换函数Id:\n";
-    typeSpec->Print(os, indent + 1);
-    if (ptrSpec)
-        ptrSpec->Print(os, indent + 1);
-    if (nameSpec)
-        nameSpec->Print(os, indent + 1);
-}
-
 void CtorMemberInitializer::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "成员: " << identifier << (isBaseCtor ? " (基类构造)\n" : "\n");

@@ -3,7 +3,7 @@
 #include "../core/constant.h"
 #include "../core/symbol.h"
 #include "../core/type.h"
-#include "llvm.h"
+#include "../llvm.h"
 
 #include <map>
 

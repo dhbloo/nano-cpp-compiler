@@ -1,7 +1,7 @@
 #pragma once
 
 #include "../ast/node.h"
-#include "../codegen/llvm.h"
+#include "../llvm.h"
 #include "symbol.h"
 
 class Driver
@@ -14,6 +14,7 @@ public:
     std::string PrintSymbolTable() const;
     std::string PrintIR() const;
     bool        EmitAssemblyCode(std::string filename) const;
+    bool        EmitSimpleMipsCode(std::string filename) const;
 
 private:
     std::ostream &errorStream;

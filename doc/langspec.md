@@ -11,14 +11,14 @@ Nano-cpp是C++的一个语言子集，该子集涵盖了C++的部分基本特性
 + C++ Style Cast（`static_cast`、`dynamic_cast`、`reinterpret_cast`、`const_cast`、函数型cast/构造如`int(x)`）
 + 联合体（Union）
 + 储存类型修饰符（`auto`、`register`、`static`、`extern`、`mutable`）
+
+还去除一些较复杂/不常用的C/C++03特性：
+
++ 部分运算符重载：类型转换运算符、`new`/`delete`重载
 + `using`语句
-
-还去除一些不常用的C/C++特性：
-
 + CV修饰符中的`volatile`
 + 函数修饰符中的`explicit`
 + `goto`语句
-+ 部分运算符重载（`new`、`delete`、`new[]`、`delete[]`），只保留全局`new`与`delete`
 + 位域
 + C式可变参数
 + 条件内局部声明
@@ -163,7 +163,6 @@ id-expression:
 unqualified-id:
     identifier
     operator-function-id
-    conversion-function-id
     '~' class-name
 
 qualified-id:
@@ -584,15 +583,6 @@ access-specifier:
 ### 9. 特殊成员函数
 
 ```
-conversion-function-id:
-	'operator' conversion-type-id
-
-conversion-type-id:
-	type-specifier-seq [conversion-declarator]
-
-conversion-declarator:
-	ptr-operator-list
-
 ctor-initializer:
 	':' mem-initializer-list
 
@@ -720,8 +710,6 @@ operator:
 + 表达式用于if条件或循环条件（`T2`为`bool`）
 
 若表达式`e`能用于*复制初始化*`T`类型（即`T t=e`），则称`e`能被隐式转换为`T`。若`T`为引用类型，则结果为左值，否则结果为右值。
-
-共有
 
 转换以如下顺序进行：
 

@@ -106,7 +106,6 @@ struct BaseSpecifier;
 
 // Special member function
 
-struct ConversionFunctionId;
 struct CtorMemberInitializer;
 
 // Operator overloading
@@ -524,7 +523,7 @@ struct DeclSpecifier : Node
     enum DeclAttribute { NONE, STATIC, FRIEND, VIRTUAL, TYPEDEF };
 
     DeclAttribute      declAttr;
-    Ptr<TypeSpecifier> typeSpec;  // opt for constructor/destructor/conversion
+    Ptr<TypeSpecifier> typeSpec;  // opt for constructor/destructor
 
     friend SyntaxStatus
          Combine(Ptr<DeclSpecifier> n1, Ptr<DeclSpecifier> n2, Ptr<DeclSpecifier> &out);
@@ -621,7 +620,6 @@ struct Declarator : Node
     void         Append(Ptr<Declarator> decl);
     void         MergePtrSpec(Ptr<PtrSpecifier> ptrSpec);
     virtual bool IsFunctionDecl() const;
-    virtual bool IsTypeConversionDecl() const;
     void         Print(std::ostream &os, Indent indent) const override;
     void         Codegen(CodegenContext &context) const override;
 };
@@ -649,7 +647,6 @@ struct IdDeclarator : Declarator
     Ptr<IdExpression> id;
 
     bool IsFunctionDecl() const;
-    bool IsTypeConversionDecl() const;
     void Print(std::ostream &os, Indent indent) const override;
     void Codegen(CodegenContext &context) const override;
 };
@@ -675,7 +672,7 @@ struct ParameterDeclaration : Node
 
 struct FunctionDefinition : Declaration
 {
-    Ptr<DeclSpecifier>            declSpec;  // opt for constructor/destructor/conversion
+    Ptr<DeclSpecifier>            declSpec;  // opt for constructor/destructor
     Ptr<Declarator>               declarator;
     PtrVec<CtorMemberInitializer> ctorInitList;  // opt
     Ptr<CompoundStatement>        funcBody;
@@ -795,16 +792,6 @@ struct BaseSpecifier : Node
 /* ------------------------------------------------------------------------- *
  * 8. Special member function
  * ------------------------------------------------------------------------- */
-
-struct ConversionFunctionId : IdExpression
-{
-    Ptr<TypeSpecifier> typeSpec;
-    Ptr<PtrSpecifier>  ptrSpec;  // opt
-
-    void        Print(std::ostream &os, Indent indent) const override;
-    std::string ComposedId(CodegenContext &context) const override;
-    void        Codegen(CodegenContext &context) const override;
-};
 
 struct CtorMemberInitializer : Node
 {

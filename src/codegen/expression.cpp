@@ -958,10 +958,18 @@ void IdExpression::Codegen(CodegenContext &context) const
     std::string composedId = ComposedId(context);
 
     if (context.decl.isTypedef) {
+        bool isPreviousAnonymousClass = context.type.IsSimple(TypeKind::CLASS)
+                                        && context.type.Class()->className[0] == '<';
         // Inject typename name into symbol table
         if (!symtab->AddTypedef(composedId, context.type))
             throw SemanticError("redeclaration type alias of '" + composedId + "'",
                                 srcLocation);
+
+        // Update anonymous class name
+        if (isPreviousAnonymousClass) {
+            context.cgHelper.MakeClass(context.type.Class())
+                ->setName(context.type.Class()->className);
+        }
 
         context.symbolSet = {};
         return;

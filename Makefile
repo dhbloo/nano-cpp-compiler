@@ -16,8 +16,11 @@ OBJ_DIR = bin
 OBJ = $(CORE_SRC:%=$(OBJ_DIR)/%.o) \
 	$(AST_SRC:%=$(OBJ_DIR)/ast_%.o) \
 	$(AST_SRC:%=$(OBJ_DIR)/gen_%.o) \
-	$(CODEGEN_SRC:%=$(OBJ_DIR)/cg_%.o)
-YY = $(OBJ_DIR)/yylexer.o $(OBJ_DIR)/yyparser.o $(OBJ_DIR)/context.o
+	$(CODEGEN_SRC:%=$(OBJ_DIR)/cg_%.o) \
+	$(OBJ_DIR)/yylexer.o \
+	$(OBJ_DIR)/yyparser.o \
+	$(OBJ_DIR)/context.o \
+	$(OBJ_DIR)/mipsgenpass.o
 
 $(OBJ_DIR)/yyparser.o: src/parser/ncc.y src/ast/node.h
 	cd src/parser && bison ncc.y --report=state
@@ -30,7 +33,7 @@ $(OBJ_DIR)/yylexer.o: src/lexer/ncc.l $(OBJ_DIR)/yyparser.o
 $(OBJ_DIR)/context.o: src/parser/context.cpp src/parser/context.h
 	$(CXX) -c -o $(OBJ_DIR)/context.o src/parser/context.cpp
 
-$(OBJ_DIR)/%.o: src/core/%.cpp src/core/%.h $(HEADER)
+$(OBJ_DIR)/%.o: src/core/%.cpp src/core/%.h $(OBJ_DIR)/yyparser.o $(HEADER)
 	$(CXX) -c -o $@ $<
 
 $(OBJ_DIR)/ast_%.o: src/ast/%.cpp $(OBJ_DIR)/yyparser.o $(HEADER)
@@ -42,16 +45,16 @@ $(OBJ_DIR)/gen_%.o: src/codegen/%.cpp $(OBJ_DIR)/yyparser.o $(HEADER)
 $(OBJ_DIR)/cg_%.o: src/codegen/%.cpp $(HEADER) 
 	$(CXX) -c -o $@ $< $(LLVM_HEADER)
 
-$(TG_DIR)/mips.inc: $(TG_DIR)/Mips.td $(TG_DIR)/MipsRegisterInfo.td
-	llvm-tblgen -o $@ $< -I$(TG_DIR) $(LLVM_TG_INC) -print-enums -class=Register
+$(OBJ_DIR)/mipsgenpass.o: src/pass/MipsAsmGen/MipsAssemblyGenPass.cpp
+	$(CXX) -c -o $@ $< $(LLVM_HEADER)
 
-$(OBJ_DIR)/lextest.exe: $(YY) $(OBJ) src/lexer/lextest.cpp
-	$(CXX) -o $@ $^
-
-$(OBJ_DIR)/parsetest.exe: $(YY) $(OBJ) src/parser/parsetest.cpp
+$(OBJ_DIR)/lextest.exe: $(OBJ) src/lexer/lextest.cpp
 	$(CXX) -o $@ $^ $(LLVM_LIB)
 
-$(OBJ_DIR)/ncc.exe: $(YY) $(OBJ) src/core/ncc.cpp
+$(OBJ_DIR)/parsetest.exe: $(OBJ) src/parser/parsetest.cpp
+	$(CXX) -o $@ $^ $(LLVM_LIB)
+
+$(OBJ_DIR)/ncc.exe: $(OBJ) src/core/ncc.cpp
 	$(CXX) -o $@ $^ $(LLVM_LIB)
 
 .PHONY: clean
@@ -62,9 +65,6 @@ parsetest: $(OBJ_DIR)/parsetest.exe
 
 ncc: $(OBJ_DIR)/ncc.exe
 
-mips: $(TG_DIR)/mips.inc
-
 clean:
 	-rm $(OBJ_DIR)/*.o
 	-rm $(OBJ_DIR)/*.exe
-	-rm $(TG_DIR)/mips.inc

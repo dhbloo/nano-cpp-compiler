@@ -77,12 +77,12 @@
 /* Keyword */
 %token BOOL         BREAK           CASE            CHAR            CLASS
 %token CONST        CONTINUE        DEFAULT         DELETE          DO
-%token DOUBLE       ELSE            ENUM            FLOAT
-%token FOR          FRIEND          IF              INT             LONG
-%token NEW          OPERATOR        PRIVATE         PROTECTED       PUBLIC            
-%token RETURN       SHORT           SIGNED          SIZEOF
-%token STATIC       STRUCT          SWITCH          THIS            
-%token TYPEDEF      UNSIGNED        VIRTUAL         VOID            WHILE
+%token DOUBLE       ELSE            ENUM            FLOAT           FOR
+%token FRIEND       IF              INT             LONG            NEW
+%token OPERATOR     PRIVATE         PROTECTED       PUBLIC          RETURN
+%token SHORT        SIGNED          SIZEOF          STATIC          STRUCT
+%token SWITCH       THIS            TYPEDEF         UNSIGNED        VIRTUAL
+%token VOID         WHILE
 
 /* Operator associativity */
 %left "::" '.' "->" ".*" "->*" '*' '/' '%' '+' '-' "<<" ">>" 
@@ -126,7 +126,8 @@
 %type<ast::Ptr<ast::BlockDeclaration>> block_declaration simple_declaration
 %type<ast::Ptr<ast::DeclSpecifier>> decl_specifier_seq decl_specifier function_specifier
 %type<ast::Ptr<ast::TypeSpecifier>> type_specifier type_specifier_seq
-%type<ast::Ptr<ast::ElaboratedTypeSpecifier>> elaborated_type_specifier simple_typename_specifier forward_class_specifier type_name
+%type<ast::Ptr<ast::ElaboratedTypeSpecifier>> elaborated_type_specifier simple_typename_specifier 
+%type<ast::Ptr<ast::ElaboratedTypeSpecifier>> forward_class_specifier type_name
 %type<ast::Ptr<ast::EnumSpecifier>> enum_specifier enumerator_list
 %type<ast::EnumSpecifier::Enumerator> enumerator_definition
 %type<FundTypePart> simple_type_specifier
@@ -134,7 +135,7 @@
 
 %type<std::vector<ast::BlockDeclaration::InitDecl>> init_declarator_list
 %type<ast::BlockDeclaration::InitDecl> init_declarator
-%type<ast::Ptr<ast::PtrSpecifier>> ptr_operator_list conversion_declarator conversion_declarator_opt
+%type<ast::Ptr<ast::PtrSpecifier>> ptr_operator_list
 %type<ast::PtrSpecifier::PtrOp> ptr_operator
 %type<ast::Ptr<ast::Declarator>> declarator direct_declarator abstract_declarator direct_abstract_declarator
 %type<ast::Ptr<ast::Declarator>> abstract_declarator_opt
@@ -156,7 +157,6 @@
 %type<ast::Ptr<ast::BaseSpecifier>> base_clause base_clause_opt base_specifier
 %type<Access> access_specifier
 
-%type<ast::Ptr<ast::ConversionFunctionId>> conversion_function_id conversion_type_id
 %type<ast::PtrVec<ast::CtorMemberInitializer>> ctor_initializer ctor_initializer_opt mem_initializer_list
 %type<ast::Ptr<ast::CtorMemberInitializer>> mem_initializer mem_initializer_id
 %type<ast::Ptr<ast::OperatorFunctionId>> operator_function_id
@@ -260,8 +260,6 @@ unqualified_id:
             pc.AddPossibleTypedefName($$->identifier);
         }
 |   operator_function_id
-        { $$ = $1; }
-|   conversion_function_id
         { $$ = $1; }
 |   '~' class_name
         {
@@ -1584,7 +1582,7 @@ member_declaration:
             e->decls.push_back($1);
 
             auto decl = e->decls.front()->decl.get();
-            if (!decl->IsFunctionDecl() || !decl->IsTypeConversionDecl())
+            if (!decl->IsFunctionDecl())
                 throw syntax_error(@$, "type specifier is required for declaration");
 
             $$ = std::move(e);
@@ -1685,23 +1683,6 @@ access_specifier:
 /* ------------------------------------------------------------------------- *
  * 9. Special member function
  * ------------------------------------------------------------------------- */
-
-conversion_function_id:
-    OPERATOR conversion_type_id { $$ = $2; }
-;
-
-conversion_type_id:
-    type_specifier_seq conversion_declarator_opt
-        {
-            $$ = MkNode<ConversionFunctionId>(); $$->srcLocation = @$;
-            $$->typeSpec = $1;
-            $$->ptrSpec = $2;
-        }
-;
-
-conversion_declarator:
-    ptr_operator_list           { $$ = $1; }
-;
 
 ctor_initializer:
     ':' mem_initializer_list    { $$ = $2; }
@@ -1828,10 +1809,6 @@ constant_expression_opt:        { $$ = nullptr; }
 
 assignment_expression_opt:      { $$ = nullptr; }
 |   '=' assignment_expression   { $$ = $2; }
-;
-
-conversion_declarator_opt:      { $$ = nullptr; }
-|   conversion_declarator       { $$ = $1; }
 ;
 
 ctor_initializer_opt:           {}

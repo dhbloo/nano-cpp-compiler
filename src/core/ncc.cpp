@@ -9,8 +9,8 @@ int main(int argc, char *argv[])
     bool        table = false, fullTable = false;
     bool        optimize = false;
     bool        ir       = false;
-    bool        assembly = false;
-    std::string outputFile;
+    bool        assembly = false, simpleMips = false;
+    std::string asmFilename, simpleMipsFilename;
     for (int i = 1; i < argc; i++) {
         if (strcmp(argv[i], "-d") == 0)
             debug = true;
@@ -25,7 +25,16 @@ int main(int argc, char *argv[])
         else if (strcmp(argv[i], "-s") == 0) {
             assembly = true;
             if (i + 1 < argc)
-                outputFile = argv[++i];
+                asmFilename = argv[++i];
+            else {
+                std::cerr << "Require output filename!\n";
+                return 1;
+            }
+        }
+        else if (strcmp(argv[i], "-ss") == 0) {
+            simpleMips = true;
+            if (i + 1 < argc)
+                simpleMipsFilename = argv[++i];
             else {
                 std::cerr << "Require output filename!\n";
                 return 1;
@@ -47,7 +56,10 @@ int main(int argc, char *argv[])
                 std::cout << driver.PrintIR();
 
             if (assembly)
-                driver.EmitAssemblyCode(outputFile);
+                driver.EmitAssemblyCode(asmFilename);
+
+            if (simpleMips)
+                driver.EmitSimpleMipsCode(simpleMipsFilename);
         }
 
         char peek = getc(stdin);

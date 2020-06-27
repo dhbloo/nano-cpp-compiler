@@ -2,9 +2,9 @@
 
 #include "../core/constant.h"
 #include "../core/symbol.h"
+#include "../llvm.h"
 #include "../parser/yylocation.h"
 #include "codegen.h"
-#include "llvm.h"
 
 #include <list>
 #include <ostream>

@@ -51,16 +51,6 @@ bool IdDeclarator::IsFunctionDecl() const
     return !ptrSpec && innerDecl ? innerDecl->IsFunctionDecl() : false;
 }
 
-bool Declarator::IsTypeConversionDecl() const
-{
-    return false;
-}
-
-bool IdDeclarator::IsTypeConversionDecl() const
-{
-    return Is<ConversionFunctionId>(*id);
-}
-
 void PtrSpecifier::Print(std::ostream &os, Indent indent) const
 {
     os << indent << "类型指针修饰:\n";

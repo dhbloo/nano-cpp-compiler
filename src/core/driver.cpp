@@ -2,6 +2,7 @@
 
 #include "../codegen/context.h"
 #include "../parser/yyparser.h"
+#include "../pass/MipsAsmGen/MipsAssemblyGenPass.h"
 
 #include <sstream>
 
@@ -82,6 +83,7 @@ std::string Driver::PrintSymbolTable() const
     if (globalSymtab)
         globalSymtab->Print(ss);
 
+    ss.flush();
     return std::move(ss.str());
 }
 
@@ -91,6 +93,7 @@ std::string Driver::PrintIR() const
     llvm::raw_string_ostream ss(IR);
 
     module->print(ss, nullptr);
+    ss.flush();
 
     return std::move(IR);
 }
@@ -141,6 +144,27 @@ bool Driver::EmitAssemblyCode(std::string filename) const
     }
 
     pm.run(*module);
+    dest.flush();
+    return true;
+}
+
+bool Driver::EmitSimpleMipsCode(std::string filename) const
+{
+    llvm::legacy::PassManager pm;
+    auto                      mipsPass = createMipsAssemblyGenPass();
+
+    pm.add(mipsPass);
+    pm.run(*module);
+
+    std::error_code      ec;
+    llvm::raw_fd_ostream dest(filename, ec, llvm::sys::fs::OF_Text);
+
+    if (ec) {
+        errorStream << "Could not open file: " << ec.message() << '\n';
+        return false;
+    }
+
+    mipsPass->print(dest, nullptr);
     dest.flush();
     return true;
 }

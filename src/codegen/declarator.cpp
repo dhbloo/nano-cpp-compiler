@@ -313,7 +313,7 @@ void FunctionDefinition::Codegen(CodegenContext &context) const
         if (declSpec)
             declSpec->Codegen(context);
         else {
-            // constructor/destructor/conversion type
+            // constructor/destructor type
             context.type = {FundType::VOID};
         }
 

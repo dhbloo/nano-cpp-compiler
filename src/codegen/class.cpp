@@ -278,40 +278,6 @@ void CtorMemberInitializer::Codegen(CodegenContext &context) const
     exprList->Codegen(context);
 }
 
-void ConversionFunctionId::Codegen(CodegenContext &context) const
-{
-    Type funcType = context.type;
-
-    if (!funcType.IsSimple(TypeKind::FUNCTION))
-        throw SemanticError("function definition does not a function", srcLocation);
-
-    typeSpec->Codegen(context);
-
-    if (ptrSpec) {
-        ptrSpec->Codegen(context);
-        context.type.ptrDescList = std::move(context.ptrDescList);
-    }
-
-    // Set function return type to conversion type
-    funcType.Function()->retType = context.type;
-    context.type                 = funcType;
-
-    IdExpression::Codegen(context);
-}
-
-std::string ConversionFunctionId::ComposedId(CodegenContext &context) const
-{
-    CodegenContext newContext {context};
-    typeSpec->Codegen(newContext);
-
-    if (ptrSpec) {
-        ptrSpec->Codegen(newContext);
-        newContext.type.ptrDescList = std::move(newContext.ptrDescList);
-    }
-
-    return "operator " + newContext.type.Name() + "()";
-}
-
 std::string OperatorFunctionId::ComposedId(CodegenContext &context) const
 {
     const char *OpNameTable[] = {
