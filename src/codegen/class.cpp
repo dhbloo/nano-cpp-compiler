@@ -267,7 +267,7 @@ void CtorMemberInitializer::Codegen(CodegenContext &context) const
     }
     else {
         // Get member symbol in class scope (current is function scope)
-        context.symbolSet = context.symtab->GetParent()->QuerySymbol(identifier);
+        context.symbolSet = context.symtab->GetParent()->QuerySymbol(identifier, true);
         if (!context.symbolSet)
             throw SemanticError("use of undeclared identifier '" + identifier + "'",
                                 srcLocation);

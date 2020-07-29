@@ -14,8 +14,8 @@ int g();
 float f(int i)
 {
     int x = 0, *px = 0;
-    x   = 1 + 2 + 3;
-    x   = x + i + 1;
+    x = 1 + 2 + 3;
+    x += i + 1;
     px  = &x;
     *px = a;
 
@@ -39,6 +39,11 @@ int h(int x, int y)
     int *pa = arr;
     pa[a]   = y;
     return pa[y];
+}
+
+int abs(int x)
+{
+    return x >= 0 ? x : 0.0f - x;
 }
 
 int main()
@@ -66,7 +71,7 @@ int main()
     } while (b <= a + 10);
 
     for (int i = 0; i < 100; ++i) {
-        a = a + i++;
+        a += i++;
         if (a > 1000 || i > 50)
             break;
         else if (i & 1)

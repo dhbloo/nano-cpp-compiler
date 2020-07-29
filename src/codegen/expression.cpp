@@ -12,6 +12,7 @@ void AssignmentExpression::Codegen(CodegenContext &context) const
     Type      lValueType = leftType.RemoveRef();
     SymbolSet varSymbol  = context.symbolSet;
     auto      lValue     = context.expr.value;
+    auto      lExprValue = lValue;
 
     if (!leftType.IsRef() || lValueType.IsSimple(TypeKind::FUNCTION)
         || context.expr.isConstant)
@@ -26,6 +27,31 @@ void AssignmentExpression::Codegen(CodegenContext &context) const
             throw SemanticError("left of expression is not assignable", srcLocation);
     }
 
+    switch (op) {
+    case AssignOp::ASSIGN:
+        break;
+    case AssignOp::SELFMOD:
+    case AssignOp::SELFSHR:
+    case AssignOp::SELFSHL:
+    case AssignOp::SELFAND:
+    case AssignOp::SELFXOR:
+    case AssignOp::SELFOR:
+        if (lValueType.IsSimple(TypeKind::FUNDTYPE)
+            && (lValueType.fundType == FundType::FLOAT
+                || lValueType.fundType == FundType::DOUBLE))
+            throw SemanticError("invalid argument type '" + lValueType.Name()
+                                    + "' to assign expression",
+                                srcLocation);
+    default:
+        if (!lValueType.IsSimple(TypeKind::FUNDTYPE))
+            throw SemanticError("invalid argument type '" + lValueType.Name()
+                                    + "' to assign expression",
+                                srcLocation);
+
+        lExprValue = context.cgHelper.CreateValue(context.type, lValueType, context.expr);
+        break;
+    }
+
     right->Codegen(context);
 
     if (!context.type.IsConvertibleTo(lValueType, context.expr.constOrNull()))
@@ -35,6 +61,137 @@ void AssignmentExpression::Codegen(CodegenContext &context) const
                             srcLocation);
 
     context.expr = context.cgHelper.CreateValue(context.type, lValueType, context.expr);
+
+    switch (op) {
+    case AssignOp::SELFMUL:
+        switch (lValueType.fundType) {
+        case FundType::BOOL:
+        case FundType::CHAR:
+        case FundType::SHORT:
+        case FundType::INT:
+        case FundType::LONG:
+        case FundType::UCHAR:
+        case FundType::USHORT:
+        case FundType::UINT:
+        case FundType::ULONG:
+            context.expr = context.IRBuilder.CreateMul(lExprValue, context.expr.value);
+            break;
+        case FundType::FLOAT:
+        case FundType::DOUBLE:
+            context.expr = context.IRBuilder.CreateFMul(lExprValue, context.expr.value);
+            break;
+        }
+        break;
+    case AssignOp::SELFDIV:
+        switch (lValueType.fundType) {
+        case FundType::BOOL:
+        case FundType::CHAR:
+        case FundType::SHORT:
+        case FundType::INT:
+        case FundType::LONG:
+            context.expr = context.IRBuilder.CreateSDiv(lExprValue, context.expr.value);
+            break;
+        case FundType::UCHAR:
+        case FundType::USHORT:
+        case FundType::UINT:
+        case FundType::ULONG:
+            context.expr = context.IRBuilder.CreateUDiv(lExprValue, context.expr.value);
+            break;
+        case FundType::FLOAT:
+        case FundType::DOUBLE:
+            context.expr = context.IRBuilder.CreateFMul(lExprValue, context.expr.value);
+            break;
+        }
+        break;
+    case AssignOp::SELFMOD:
+        switch (lValueType.fundType) {
+        case FundType::BOOL:
+        case FundType::CHAR:
+        case FundType::SHORT:
+        case FundType::INT:
+        case FundType::LONG:
+            context.expr = context.IRBuilder.CreateSRem(lExprValue, context.expr.value);
+            break;
+        case FundType::UCHAR:
+        case FundType::USHORT:
+        case FundType::UINT:
+        case FundType::ULONG:
+            context.expr = context.IRBuilder.CreateURem(lExprValue, context.expr.value);
+            break;
+        }
+        break;
+        break;
+    case AssignOp::SELFADD:
+        switch (lValueType.fundType) {
+        case FundType::BOOL:
+        case FundType::CHAR:
+        case FundType::SHORT:
+        case FundType::INT:
+        case FundType::LONG:
+        case FundType::UCHAR:
+        case FundType::USHORT:
+        case FundType::UINT:
+        case FundType::ULONG:
+            context.expr = context.IRBuilder.CreateAdd(lExprValue, context.expr.value);
+            break;
+        case FundType::FLOAT:
+        case FundType::DOUBLE:
+            context.expr = context.IRBuilder.CreateFAdd(lExprValue, context.expr.value);
+            break;
+        }
+        break;
+    case AssignOp::SELFSUB:
+        switch (lValueType.fundType) {
+        case FundType::BOOL:
+        case FundType::CHAR:
+        case FundType::SHORT:
+        case FundType::INT:
+        case FundType::LONG:
+        case FundType::UCHAR:
+        case FundType::USHORT:
+        case FundType::UINT:
+        case FundType::ULONG:
+            context.expr = context.IRBuilder.CreateSub(lExprValue, context.expr.value);
+            break;
+        case FundType::FLOAT:
+        case FundType::DOUBLE:
+            context.expr = context.IRBuilder.CreateFSub(lExprValue, context.expr.value);
+            break;
+        }
+        break;
+    case AssignOp::SELFSHR:
+        switch (lValueType.fundType) {
+        case FundType::BOOL:
+        case FundType::CHAR:
+        case FundType::SHORT:
+        case FundType::INT:
+        case FundType::LONG:
+            context.expr = context.IRBuilder.CreateAShr(lExprValue, context.expr.value);
+            break;
+        case FundType::UCHAR:
+        case FundType::USHORT:
+        case FundType::UINT:
+        case FundType::ULONG:
+            context.expr = context.IRBuilder.CreateLShr(lExprValue, context.expr.value);
+            break;
+        }
+        break;
+    case AssignOp::SELFSHL:
+        context.expr = context.IRBuilder.CreateShl(lExprValue, context.expr.value);
+        break;
+    case AssignOp::SELFAND:
+        context.expr = context.IRBuilder.CreateAnd(lExprValue, context.expr.value);
+        break;
+    case AssignOp::SELFXOR:
+        context.expr = context.IRBuilder.CreateXor(lExprValue, context.expr.value);
+        break;
+    case AssignOp::SELFOR:
+        context.expr = context.IRBuilder.CreateOr(lExprValue, context.expr.value);
+        break;
+    default:
+        break;
+    }
+
     context.IRBuilder.CreateAlignedStore(context.expr.value,
                                          lValue,
                                          llvm::Align(lValueType.Alignment()));
@@ -46,50 +203,84 @@ void AssignmentExpression::Codegen(CodegenContext &context) const
 void ConditionalExpression::Codegen(CodegenContext &context) const
 {
     condition->Codegen(context);
-    Type condType = context.type.Decay();
-    auto condExpr = context.expr;
-    if (!condType.IsConvertibleTo(FundType::BOOL, condExpr.constOrNull()))
-        throw SemanticError(condType.Name() + " is not convertible to bool", srcLocation);
+    if (!context.type.IsConvertibleTo(FundType::BOOL, context.expr.constOrNull()))
+        throw SemanticError(context.type.Name() + " is not convertible to bool",
+                            srcLocation);
 
+    context.expr =
+        context.cgHelper.CreateValue(context.type, FundType::BOOL, context.expr);
+
+    auto function = context.IRBuilder.GetInsertBlock()->getParent();
+    auto trueBB =
+        llvm::BasicBlock::Create(context.llvmContext, "condexpr.true", function);
+    auto falseBB = llvm::BasicBlock::Create(context.llvmContext, "condexpr.false");
+    auto mergeBB = llvm::BasicBlock::Create(context.llvmContext, "condexpr.merge");
+    context.IRBuilder.CreateCondBr(context.expr.value, trueBB, falseBB);
+
+    context.IRBuilder.SetInsertPoint(trueBB);
     trueExpr->Codegen(context);
     Type trueType = context.type;
     auto trueExpr = context.expr;
 
+    function->getBasicBlockList().push_back(falseBB);
+    context.IRBuilder.SetInsertPoint(falseBB);
     falseExpr->Codegen(context);
     Type falseType = context.type;
     auto falseExpr = context.expr;
 
-    context.expr.isConstant =
-        condExpr.isConstant && trueExpr.isConstant && falseExpr.isConstant;
-
     if (trueType == falseType) {
-        context.expr.constant =
-            condExpr.constant.boolVal ? trueExpr.constant : falseExpr.constant;
-        return;
-    }
+        if (trueExpr.isConstant) {
+            context.IRBuilder.SetInsertPoint(trueBB);
+            trueExpr = context.cgHelper.CreateConstant(trueType, trueExpr.constant);
+        }
+        if (falseExpr.isConstant) {
+            context.IRBuilder.SetInsertPoint(falseBB);
+            falseExpr = context.cgHelper.CreateConstant(falseType, falseExpr.constant);
+        }
 
-    trueType  = trueType.Decay();
-    falseType = falseType.Decay();
-
-    if (trueType == falseType) {
         context.type = trueType;
-        return;
+    }
+    else {
+        Type newTrueType  = trueType.Decay();
+        Type newFalseType = falseType.Decay();
+
+        if (newTrueType == newFalseType) {
+            context.type = newTrueType;
+        }
+        else {
+            // Convert to arithmetic type
+            Type commonType = newTrueType.ArithmeticConvert(newFalseType);
+            if (!trueType.IsConvertibleTo(commonType, trueExpr.constOrNull())
+                || !falseType.IsConvertibleTo(commonType, falseExpr.constOrNull()))
+                throw SemanticError("incompatible operand type ('" + trueType.Name()
+                                        + "' and '" + falseType.Name() + "')",
+                                    srcLocation);
+
+            context.type = commonType;
+        }
+
+        context.IRBuilder.SetInsertPoint(trueBB);
+        trueExpr = context.cgHelper.CreateValue(trueType, context.type, trueExpr);
+        context.IRBuilder.SetInsertPoint(falseBB);
+        falseExpr = context.cgHelper.CreateValue(falseType, context.type, falseExpr);
     }
 
-    // TODO: more conditional expr implicit conversion
+    context.IRBuilder.SetInsertPoint(trueBB);
+    if (!context.IRBuilder.GetInsertBlock()->getTerminator())
+        context.IRBuilder.CreateBr(mergeBB);
 
-    // Convert to arithmetic type
-    Type commonType = trueType.ArithmeticConvert(falseType);
+    context.IRBuilder.SetInsertPoint(falseBB);
+    if (!context.IRBuilder.GetInsertBlock()->getTerminator())
+        context.IRBuilder.CreateBr(mergeBB);
 
-    if (!trueType.IsConvertibleTo(commonType, trueExpr.constOrNull())
-        || !falseType.IsConvertibleTo(commonType, falseExpr.constOrNull()))
-        throw SemanticError("operand types '" + trueType.Name() + "' and '"
-                                + falseType.Name() + "' are incompatible",
-                            srcLocation);
+    function->getBasicBlockList().push_back(mergeBB);
+    context.IRBuilder.SetInsertPoint(mergeBB);
 
-    context.type = commonType;
-    context.expr.constant =
-        condExpr.constant.boolVal ? trueExpr.constant : falseExpr.constant;
+    auto PHINode =
+        context.IRBuilder.CreatePHI(context.cgHelper.MakeType(context.type), 2);
+    PHINode->addIncoming(trueExpr.value, trueBB);
+    PHINode->addIncoming(falseExpr.value, falseBB);
+    context.expr = PHINode;
 }
 
 void BinaryExpression::Codegen(CodegenContext &context) const
@@ -127,7 +318,8 @@ void BinaryExpression::Codegen(CodegenContext &context) const
                                     + "' is not a class or struct",
                                 srcLocation);
 
-        rightCtx.symtab = leftType.Class()->memberTable.get();
+        rightCtx.symtab         = leftType.Class()->memberTable.get();
+        rightCtx.qualifiedScope = rightCtx.symtab;
         break;
 
     case BinaryOp::ARROW:
@@ -153,7 +345,8 @@ void BinaryExpression::Codegen(CodegenContext &context) const
         context.expr =
             context.cgHelper.ConvertType(context.type, leftType, context.expr.value);
         leftType = leftType.RemovePtr().AddPtrDesc(Type::PtrDescriptor {PtrType::REF});
-        rightCtx.symtab = leftType.Class()->memberTable.get();
+        rightCtx.symtab         = leftType.Class()->memberTable.get();
+        rightCtx.qualifiedScope = rightCtx.symtab;
         break;
 
     case BinaryOp::LOGIAND:
@@ -212,7 +405,7 @@ void BinaryExpression::Codegen(CodegenContext &context) const
     right->Codegen(rightCtx);
 
     switch (op) {
-    case BinaryOp::SUBSCRIPT: {
+    case BinaryOp::SUBSCRIPT:
         if (!rightCtx.type.IsConvertibleTo(FundType::INT, rightCtx.expr.constOrNull()))
             throw SemanticError("array subscript is not an integer", srcLocation);
 
@@ -241,14 +434,13 @@ void BinaryExpression::Codegen(CodegenContext &context) const
         context.type =
             leftType.ElementType().AddPtrDesc(Type::PtrDescriptor {PtrType::REF});
         break;
-    }
 
     case BinaryOp::DOTSTAR:
     case BinaryOp::ARROWSTAR:
         throw SemanticError("unimp", srcLocation);
 
     case BinaryOp::DOT:
-    case BinaryOp::ARROW: {
+    case BinaryOp::ARROW:
         assert(!rightCtx.expr.isConstant);
         assert(rightCtx.symbolSet);
 
@@ -267,7 +459,6 @@ void BinaryExpression::Codegen(CodegenContext &context) const
         }
         context.symbolSet = {};
         break;
-    }
 
     case BinaryOp::COMMA:
         if (context.expr.isConstant &= rightCtx.expr.isConstant) {
@@ -326,14 +517,14 @@ void BinaryExpression::Codegen(CodegenContext &context) const
             && (leftType.fundType == FundType::FLOAT
                 || leftType.fundType == FundType::DOUBLE))
             throw SemanticError("invalid argument type '" + leftType.Name()
-                                    + "' to unary expression",
+                                    + "' to binary expression",
                                 srcLocation);
 
         if (rightCtx.type.Decay().IsSimple(TypeKind::FUNDTYPE)
             && (rightCtx.type.Decay().fundType == FundType::FLOAT
                 || rightCtx.type.Decay().fundType == FundType::DOUBLE))
             throw SemanticError("invalid argument type '" + rightCtx.type.Decay().Name()
-                                    + "' to unary expression",
+                                    + "' to binary expression",
                                 srcLocation);
 
     default:
@@ -737,6 +928,7 @@ void UnaryExpression::Codegen(CodegenContext &context) const
         assert(!context.expr.isConstant);
         auto rvalue =
             context.cgHelper.ConvertType(context.type, exprType, context.expr.value);
+        auto orvalue = rvalue;
 
         if (exprType.IsSimple(TypeKind::FUNDTYPE)) {
             auto oneConstant =
@@ -790,7 +982,7 @@ void UnaryExpression::Codegen(CodegenContext &context) const
         context.IRBuilder.CreateAlignedStore(rvalue,
                                              context.expr.value,
                                              llvm::Align(exprType.Alignment()));
-        context.expr = rvalue;
+        context.expr = orvalue;
         context.type = exprType;
         break;
     }
@@ -944,8 +1136,16 @@ void DeleteExpression::Codegen(CodegenContext &context) const
 
 void IdExpression::Codegen(CodegenContext &context) const
 {
-    SymbolTable *symtab    = context.symtab;
+    SymbolTable *symtab    = nullptr;
     bool         qualified = false;
+
+    if (context.qualifiedScope) {
+        std::swap(symtab, context.qualifiedScope);
+        qualified = true;
+    }
+    else {
+        symtab = context.symtab;
+    }
 
     if (nameSpec) {
         nameSpec->Codegen(context);
@@ -1029,17 +1229,19 @@ void IdExpression::Codegen(CodegenContext &context) const
             // in class symbol table. Pointer to current class instance is the first
             // function argument.
 
-            // auto classDesc = symtab->GetCurrentClass();
-            // if (classDesc && context.symbolSet->Attr() != Symbol::STATIC
-            //     && context.symbolSet.Scope() == classDesc->memberTable.get()) {
-            //     context.expr = context.IRBuilder.CreateStructGEP(
-            //         symtab->GetCurrentFunction()->paramList.front().symbol->value,
-            //         context.symbolSet->index,
-            //         context.symbolSet->id);
-            // }
-            // else {
-            context.expr = context.symbolSet->value;
-            //}
+            auto classDesc = context.symbolSet.Scope()->GetCurrentClass();
+            auto funcDesc  = context.symtab->GetCurrentFunction();
+            if (classDesc && funcDesc && context.symbolSet->Attr() != Symbol::STATIC
+                && funcDesc->IsNonStaticMember()
+                && context.symbolSet.Scope() == classDesc->memberTable.get()) {
+                context.expr = context.IRBuilder.CreateStructGEP(
+                    funcDesc->paramList.front().symbol->value,
+                    context.symbolSet->index,
+                    context.symbolSet->id);
+            }
+            else {
+                context.expr = context.symbolSet->value;
+            }
         }
 
         // Id expression is always a l-value (except for function and constant)
