@@ -406,7 +406,10 @@ void BinaryExpression::Codegen(CodegenContext &context) const
 
     switch (op) {
     case BinaryOp::SUBSCRIPT:
-        if (!rightCtx.type.IsConvertibleTo(FundType::INT, rightCtx.expr.constOrNull()))
+        if (!rightCtx.type.IsConvertibleTo(FundType::INT, rightCtx.expr.constOrNull())
+            || rightCtx.type.Decay().IsSimple(TypeKind::FUNDTYPE)
+                   && (rightCtx.type.fundType == FundType::FLOAT
+                       || rightCtx.type.fundType == FundType::DOUBLE))
             throw SemanticError("array subscript is not an integer", srcLocation);
 
         if (rightCtx.expr.isConstant) {
@@ -891,7 +894,8 @@ void UnaryExpression::Codegen(CodegenContext &context) const
                                     srcLocation);
         }
         else if (exprType.IsSimple(TypeKind::CLASS)) {
-            throw SemanticError("unimplemented", srcLocation);
+            throw SemanticError("class type operand not supported (unimplemented)",
+                                srcLocation);
         }
         else if (exprType.IsPtr()) {
             auto oneOffset = context.cgHelper.CreateConstant(FundType::INT, Constant {1});
@@ -962,7 +966,8 @@ void UnaryExpression::Codegen(CodegenContext &context) const
                                     srcLocation);
         }
         else if (exprType.IsSimple(TypeKind::CLASS)) {
-            throw SemanticError("unimplemented", srcLocation);
+            throw SemanticError("class type operand not supported (unimplemented)",
+                                srcLocation);
         }
         else if (exprType.IsPtr()) {
             auto oneOffset = context.cgHelper.CreateConstant(FundType::INT, Constant {1});

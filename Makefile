@@ -1,8 +1,7 @@
 CXX = g++ -std=c++14 -O0 -g
 
-LLVM_HEADER = -I`llvm-config --libdir`
+LLVM_HEADER = -I`llvm-config --includedir`
 LLVM_LIB = `llvm-config --ldflags` `llvm-config --system-libs --libs`
-LLVM_TG_INC = -I`llvm-config --includedir`
 
 HEADER = src/core/operator.h src/core/typeEnum.h src/core/symbol.h \
 		src/core/type.h src/core/constant.h \
@@ -10,7 +9,6 @@ HEADER = src/core/operator.h src/core/typeEnum.h src/core/symbol.h \
 CORE_SRC = driver symbol type constant
 AST_SRC = basic expression declaration class statement declarator
 CODEGEN_SRC = codegen
-TG_DIR = src/target/mips-r
 
 OBJ_DIR = bin
 OBJ = $(CORE_SRC:%=$(OBJ_DIR)/%.o) \
@@ -22,11 +20,14 @@ OBJ = $(CORE_SRC:%=$(OBJ_DIR)/%.o) \
 	$(OBJ_DIR)/context.o \
 	$(OBJ_DIR)/mipsgenpass.o
 
-$(OBJ_DIR)/yyparser.o: src/parser/ncc.y src/ast/node.h
+$(OBJ_DIR): 
+	mkdir -p $(OBJ_DIR)
+
+$(OBJ_DIR)/yyparser.o: $(OBJ_DIR) src/parser/ncc.y src/ast/node.h
 	cd src/parser && bison ncc.y --report=state
 	$(CXX) -c -o $(OBJ_DIR)/yyparser.o src/parser/yyparser.cpp
 
-$(OBJ_DIR)/yylexer.o: src/lexer/ncc.l $(OBJ_DIR)/yyparser.o
+$(OBJ_DIR)/yylexer.o: $(OBJ_DIR) src/lexer/ncc.l $(OBJ_DIR)/yyparser.o
 	cd src/lexer && flex ncc.l
 	$(CXX) -c -o $(OBJ_DIR)/yylexer.o src/lexer/yylexer.cpp
 
@@ -34,7 +35,7 @@ $(OBJ_DIR)/context.o: src/parser/context.cpp src/parser/context.h
 	$(CXX) -c -o $(OBJ_DIR)/context.o src/parser/context.cpp
 
 $(OBJ_DIR)/%.o: src/core/%.cpp src/core/%.h $(OBJ_DIR)/yyparser.o $(HEADER)
-	$(CXX) -c -o $@ $<
+	$(CXX) -c -o $@ $< $(LLVM_HEADER)
 
 $(OBJ_DIR)/ast_%.o: src/ast/%.cpp $(OBJ_DIR)/yyparser.o $(HEADER)
 	$(CXX) -c -o $@ $<
@@ -68,3 +69,4 @@ ncc: $(OBJ_DIR)/ncc.exe
 clean:
 	-rm $(OBJ_DIR)/*.o
 	-rm $(OBJ_DIR)/*.exe
+	-rmdir $(OBJ_DIR)

@@ -891,8 +891,6 @@ void MipsAssemblyGenPass::stackAllocate(const Function *F)
             stackAlloc[allocInst] = stackTop;
             stackTop += size;
 
-            // ss << "# stack alloc: " << allocInst->getName() << " = "
-            //    << stackAlloc[allocInst] << '\n';
             ss << "# " << stackAlloc[allocInst] << ", size " << size << ", align "
                << align << " : " << allocInst->getName() << '\n';
         }

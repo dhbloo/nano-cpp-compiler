@@ -81,7 +81,7 @@ bool ParseContext::AddName(std::string name, IdType type)
     lastAddedName = name;
     return true;
 }
-#include <iostream>
+
 ParseContext::IdType ParseContext::QueryName(std::string name) const
 {
     // Qualified destructor
